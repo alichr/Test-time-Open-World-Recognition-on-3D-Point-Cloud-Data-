@@ -2,5 +2,6 @@
 statement = "Ali is nice"
 print(statement)
 print('mama')
+print('mama_jon')
 
 
