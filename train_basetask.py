@@ -6,8 +6,7 @@ import torch
 import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
-from pointnet.dataset import ShapeNetDataset, ModelNetDataset
-from pointnet.model import PointNetCls, feature_transform_regularizer
+from model.model import PointNetCls, feature_transform_regularizer
 import torch.nn.functional as F
 from tqdm import tqdm
 
@@ -16,7 +15,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     '--batchSize', type=int, default=32, help='input batch size')
 parser.add_argument(
-    '--num_points', type=int, default=2500, help='input batch size')
+    '--num_points', type=int, default=1024, help='input batch size')
 parser.add_argument(
     '--workers', type=int, help='number of data loading workers', default=4)
 parser.add_argument(
@@ -37,53 +36,56 @@ print("Random Seed: ", opt.manualSeed)
 random.seed(opt.manualSeed)
 torch.manual_seed(opt.manualSeed)
 
-if opt.dataset_type == 'shapenet':
-    dataset = ShapeNetDataset(
-        root=opt.dataset,
-        classification=True,
-        npoints=opt.num_points)
 
-    test_dataset = ShapeNetDataset(
-        root=opt.dataset,
-        classification=True,
-        split='test',
-        npoints=opt.num_points,
-        data_augmentation=False)
-elif opt.dataset_type == 'modelnet40':
-    dataset = ModelNetDataset(
-        root=opt.dataset,
-        npoints=opt.num_points,
-        split='trainval')
+## dataset and dataloader
 
-    test_dataset = ModelNetDataset(
-        root=opt.dataset,
-        split='test',
-        npoints=opt.num_points,
-        data_augmentation=False)
-else:
-    exit('wrong dataset type')
+# if opt.dataset_type == 'shapenet':
+#     dataset = ShapeNetDataset(
+#         root=opt.dataset,
+#         classification=True,
+#         npoints=opt.num_points)
+
+#     test_dataset = ShapeNetDataset(
+#         root=opt.dataset,
+#         classification=True,
+#         split='test',
+#         npoints=opt.num_points,
+#         data_augmentation=False)
+# elif opt.dataset_type == 'modelnet40':
+#     dataset = ModelNetDataset(
+#         root=opt.dataset,
+#         npoints=opt.num_points,
+#         split='trainval')
+
+#     test_dataset = ModelNetDataset(
+#         root=opt.dataset,
+#         split='test',
+#         npoints=opt.num_points,
+#         data_augmentation=False)
+# else:
+#     exit('wrong dataset type')
 
 
-dataloader = torch.utils.data.DataLoader(
-    dataset,
-    batch_size=opt.batchSize,
-    shuffle=True,
-    num_workers=int(opt.workers))
+# dataloader = torch.utils.data.DataLoader(
+#     dataset,
+#     batch_size=opt.batchSize,
+#     shuffle=True,
+#     num_workers=int(opt.workers))
 
-testdataloader = torch.utils.data.DataLoader(
-        test_dataset,
-        batch_size=opt.batchSize,
-        shuffle=True,
-        num_workers=int(opt.workers))
+# testdataloader = torch.utils.data.DataLoader(
+#         test_dataset,
+#         batch_size=opt.batchSize,
+#         shuffle=True,
+#         num_workers=int(opt.workers))
 
-print(len(dataset), len(test_dataset))
-num_classes = len(dataset.classes)
-print('classes', num_classes)
+# print(len(dataset), len(test_dataset))
+# num_classes = len(dataset.classes)
+# print('classes', num_classes)
 
-try:
-    os.makedirs(opt.outf)
-except OSError:
-    pass
+# try:
+#     os.makedirs(opt.outf)
+# except OSError:
+#     pass
 
 classifier = PointNetCls(k=num_classes, feature_transform=opt.feature_transform)
 
