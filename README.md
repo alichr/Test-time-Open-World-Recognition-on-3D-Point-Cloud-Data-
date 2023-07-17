@@ -1,1 +1,1 @@
-# Test-time-Open-World-Recognition-on-3D-Point-Cloud-Data-
+# training the base-tak
