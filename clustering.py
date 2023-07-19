@@ -4,14 +4,16 @@ import torch
 from foundation import clip
 import torch.nn as nn
 from utils.mv_utils_zs import Realistic_Projection
+from transformers import CLIPProcessor, CLIPModel
 
 ## define dataset and dataloader
 
 
 
 ## define model
-device = "cuda" if torch.cuda.is_available() else "cpu"
-model, preprocess = clip.load("ViT-B/32", device=device)
+model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+# device = "cuda" if torch.cuda.is_available() else "cpu"
+# model, preprocess = clip.load("ViT-B/32", device=device)
 
 
 
