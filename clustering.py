@@ -17,7 +17,7 @@ model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrai
 #model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
 # device = "cuda" if torch.cuda.is_available() else "cpu"
 # model, preprocess = clip.load("ViT-B/32", device=device)
-print(model)
+
 
 
 
