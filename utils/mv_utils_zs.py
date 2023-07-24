@@ -4,6 +4,8 @@ import numpy as np
 import torch
 
 TRANS = -1.5
+# define device
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # realistic projection parameters
 params = {'maxpoolz':1, 'maxpoolxy':7, 'maxpoolpadz':0, 'maxpoolpadxy':2,
@@ -165,15 +167,15 @@ class Realistic_Projection:
 
         self.num_views = _views.shape[0]
 
-        angle = torch.tensor(_views[:, 0, :]).float().cuda()
+        angle = torch.tensor(_views[:, 0, :]).float()
         self.rot_mat = euler2mat(angle).transpose(1, 2)
-        angle2 = torch.tensor(_views_bias[:, 0, :]).float().cuda()
+        angle2 = torch.tensor(_views_bias[:, 0, :]).float()
         self.rot_mat2 = euler2mat(angle2).transpose(1, 2)
 
-        self.translation = torch.tensor(_views[:, 1, :]).float().cuda()
+        self.translation = torch.tensor(_views[:, 1, :]).float()
         self.translation = self.translation.unsqueeze(1)
 
-        self.grid2image = Grid2Image().cuda()
+        self.grid2image = Grid2Image()
 
     def get_img(self, points):
         b, _, _ = points.shape

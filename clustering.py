@@ -10,6 +10,11 @@ from sklearn.cluster import KMeans
 import open_clip
 from utils.mv_utils_zs import Realistic_Projection
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+# generate 100 random samples with size 1024 x 3
+X = np.random.rand(100, 1024, 3)
+
+
 ## Define CLIP model
 def clip_model():
     # Create a CLIP model with a specified architecture and pre-trained weights
@@ -35,10 +40,51 @@ def SVD(X, n_components=10):
     return U[:, :n_components]
 
 
-print(clip_model())
 
+## Define main function
+def main():
+
+    # create 100 random samples using torch
+    X = torch.rand(100, 1024, 3)
+
+    # Load CLIP model
+    model, preprocess = clip_model()
+
+    # Load Realistic Projection object
+    proj = projection()
+
+    image_prject = proj.get_img(X[:2])
+
+    print(image_prject.shape)
     
 
+    fuck
+
+
+    # Preprocess data X
+    X = preprocess(X)
+
+    # Create subspace using SVD
+    X = SVD(X)
+
+    # Cluster data X into n_clusters groups
+    n_clusters = 10
+    kmeans = clustering(X, n_clusters)
+
+    # Save the cluster centers
+    cluster_centers = kmeans.cluster_centers_
+
+    # Save the cluster labels
+    cluster_labels = kmeans.labels_
+
+    # Save the cluster inertia
+    cluster_inertia = kmeans.inertia_
+
+    # Save the cluster sizes
+    cluster_sizes = np.bincount(cluster_labels)
+
+if __name__ == "__main__":
+    main()
 
 
 
