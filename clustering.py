@@ -49,7 +49,13 @@ def main():
     # Load Realistic Projection object
     proj = projection()
 
-    image_prject = proj.get_img(X[:2])
+    image_prj = proj.get_img(X[:1])
+    print(X[:1])
+    image = torch.nn.functional.interpolate(image_prj, size=(224, 224), mode='bilinear', align_corners=True)  
+
+    print(image)
+
+
 
 
 
