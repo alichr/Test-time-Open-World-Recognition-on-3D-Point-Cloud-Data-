@@ -1,5 +1,4 @@
 import numpy as np
-import sklearn
 import torch
 from foundation import clip
 import torch.nn as nn
@@ -8,14 +7,10 @@ from utils.mv_utils_zs import Realistic_Projection
 import open_clip
 from PIL import Image
 
-
-
-
 ## define dataset and dataloader
 
 
 ## define clip model
-
 def clip_model():
     model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
     return model, preprocess
@@ -27,13 +22,21 @@ def projection():
 
 ## define clustering
 def clustering(X, n_clusters=10):
+    from sklearn.cluster import KMeans
     kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(X)
     return kmeans
 
-X = np.array([[1, 2], [1, 4], [1, 0], [10, 2], [10, 4], [10, 0]])    
+# define SVD for creating subspace using pytroch
+def SVD(X, n_components=10):
+    U, S, V = torch.svd(X)
+    return U[:, :n_components]
 
-cluster = clustering(X, n_clusters=2)
-print(cluster.labels_)
+
+print(clip_model())
+    
+
+
+
 
 
 
