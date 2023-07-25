@@ -40,21 +40,28 @@ def SVD(X, n_components=10):
 ## Define main function
 def main():
 
-    # create 100 random samples using torch
-    X = torch.rand(100, 1024, 3)
-
     # Load CLIP model
     model, preprocess = clip_model()
 
     # Load Realistic Projection object
     proj = projection()
 
-    image_prj = proj.get_img(X[:1])
-    print(X[:1])
-    image = torch.nn.functional.interpolate(image_prj, size=(224, 224), mode='bilinear', align_corners=True)  
+    # create 100 random samples using torch
+    pc = torch.rand(100, 1024, 3)
 
-    print(image)
+    # project samples to image
+    pc_prj = proj.get_img(pc)
+    pc_img = torch.nn.functional.interpolate(pc_prj, size=(224, 224), mode='bilinear', align_corners=True)  
 
+    # forwad samples to clip model
+    with torch.no_grad():
+        pc_img = pc_img.to(device)
+        pc_img = model.encode_image(pc_img)
+        pc_img = pc_img.cpu().numpy()
+        print(pc_img.shape)
+
+    # cluster samples
+    kmeans = clustering(pc_img, n_clusters=10)
 
 
 
