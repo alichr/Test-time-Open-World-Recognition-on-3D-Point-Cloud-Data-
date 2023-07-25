@@ -48,26 +48,32 @@ def main():
 
     # create 100 random samples using torch
     pc = torch.rand(100, 1024, 3)
-
-    # project samples to image
-    pc_prj = proj.get_img(pc)
-    pc_img = torch.nn.functional.interpolate(pc_prj, size=(224, 224), mode='bilinear', align_corners=True)  
+    # define a feature vecros size (100, 512)
+    feature_vectors = np.zeros((100, 512))
 
     # forwad samples to clip model
     with torch.no_grad():
-        pc_img = pc_img.to(device)
-        pc_img = model.encode_image(pc_img)
-        pc_img = pc_img.cpu().numpy()
-        print(pc_img.shape)
-
+        for i in range(100):
+            # project samples to image
+            pc_prj = proj.get_img(pc[i,:,:].unsqueeze(0))
+            pc_img = torch.nn.functional.interpolate(pc_prj, size=(224, 224), mode='bilinear', align_corners=True)  
+            pc_img = pc_img.to(device)
+            # forward samples to clip model
+            pc_img = model.encode_image(pc_img)
+            pc_img = pc_img.cpu().numpy()
+            pc_img_avg = np.mean(pc_img, axis=0)        
+            # save feature vectors
+            feature_vectors[i,:] = pc_img_avg
+            print(i)
     # cluster samples
-    kmeans = clustering(pc_img, n_clusters=10)
+    kmeans = clustering(feature_vectors, n_clusters=10)
 
 
 
 
 if __name__ == "__main__":
     main()
+    print("Done!")
 
 
 
