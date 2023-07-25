@@ -51,6 +51,23 @@ def clustering(X, n_clusters=10):
     kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(X)
     return kmeans
 
+# Define SVD for creating a subspace using numpy
+def SVD_numpy(X, n_components=3):
+    """
+    Perform Singular Value Decomposition (SVD) on data X using numpy.
+
+    Parameters:
+    - X: The data for SVD.
+    - n_components: The number of top singular values and vectors to keep.
+
+    Returns:
+    - U: Left singular vectors of X.
+    - S: Singular values of X.
+    - V: Right singular vectors of X.
+    """
+    U, S, V = np.linalg.svd(X, full_matrices=False)
+    return U[:, :n_components], S, V
+
 # Define SVD for creating a subspace using PyTorch
 def SVD(X, n_components=10):
     """
@@ -66,7 +83,7 @@ def SVD(X, n_components=10):
     - V: Right singular vectors of X.
     """
     U, S, V = torch.svd(X)
-    return U[:, :n_components]
+    return U[:, :n_components], S, V
 
 
 ## Define main function
@@ -109,6 +126,15 @@ def main():
     
     # Step 5: Cluster samples
     kmeans = clustering(feature_vectors, n_clusters=10)
+
+    # Step6: seperate the clusters into different groups and apply SVD to each group and save each subsapce in a subsapce folder
+    for i in range(10):
+        idx = np.where(kmeans.labels_ == i)[0]  # Use [0] to access the indices array from tuple
+        cluster_feature_vectors = feature_vectors[idx]
+        print(cluster_feature_vectors.shape)
+        U, S, V = SVD_numpy(cluster_feature_vectors, n_components=3)
+        np.save('subspace/subspace' + str(i) + '.npy', U)
+        print(i)
 
 if __name__ == "__main__":
     main()
