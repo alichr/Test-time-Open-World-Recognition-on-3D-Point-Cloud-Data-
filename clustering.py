@@ -13,6 +13,8 @@ from utils.mv_utils_zs import Realistic_Projection
 # Check if a CUDA-enabled GPU is available, otherwise use CPU
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+
+
 ## Define CLIP model
 def clip_model():
     """
