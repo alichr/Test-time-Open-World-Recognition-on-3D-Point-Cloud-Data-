@@ -136,6 +136,22 @@ def main():
         np.save('subspace/subspace' + str(i) + '.npy', U)
         print(i)
 
+    # step 7: min absoulte error of extracted subsapce and original subspace
+    # load the original subspace
+    original_subspace = np.load('subspace/subspace.npy')
+    # load the extracted subspace
+    extracted_subspace = np.load('subspace/subspace0.npy')
+    # calculate the min absoulte error
+    min_abs_error = np.min(np.abs(original_subspace - extracted_subspace))
+    print(min_abs_error)
+
+
+
+  
+
+
 if __name__ == "__main__":
     main()
     print("Done!")
+
+ 
