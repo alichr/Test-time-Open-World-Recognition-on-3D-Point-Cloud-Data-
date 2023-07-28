@@ -13,6 +13,9 @@ from utils.mv_utils_zs import Realistic_Projection
 # Check if a CUDA-enabled GPU is available, otherwise use CPU
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+# read numpy data   
+
+
 
 
 ## Define CLIP model
@@ -138,18 +141,7 @@ def main():
         np.save('subspace/subspace' + str(i) + '.npy', U)
         print(i)
 
-    # step 7: min absoulte error of extracted subsapce and original subspace
-    # load the original subspace
-    original_subspace = np.load('subspace/subspace.npy')
-    # load the extracted subspace
-    extracted_subspace = np.load('subspace/subspace0.npy')
-    # calculate the min absoulte error
-    min_abs_error = np.min(np.abs(original_subspace - extracted_subspace))
-    print(min_abs_error)
 
-
-
-  
 
 
 if __name__ == "__main__":
