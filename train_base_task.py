@@ -1,100 +1,81 @@
+# Import necessary libraries and modules
 from __future__ import print_function
 import argparse
 import os
 import random
 import torch
-import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
-from model.PointNet import PointNetCls, feature_transform_regularizer
+from model.PointNet import PointNetfeat
 import torch.nn.functional as F
 from tqdm import tqdm
+import open_clip
+from utils.mv_utils_zs import Realistic_Projection
 
+# Check if a CUDA-enabled GPU is available, otherwise use CPU
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+# Set up command-line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument(
-    '--batchSize', type=int, default=32, help='input batch size')
-parser.add_argument(
-    '--num_points', type=int, default=1024, help='input batch size')
-parser.add_argument(
-    '--workers', type=int, help='number of data loading workers', default=4)
-parser.add_argument(
-    '--nepoch', type=int, default=250, help='number of epochs to train for')
-parser.add_argument('--outf', type=str, default='cls', help='output folder')
-parser.add_argument('--model', type=str, default='', help='model path')
-#parser.add_argument('--dataset', type=str, required=True, help="dataset path")
-#parser.add_argument('--dataset_type', type=str, default='shapenet', help="dataset type shapenet|modelnet40")
-parser.add_argument('--feature_transform', action='store_true', help="use feature transform")
+parser.add_argument('--batchSize', type=int, default=32, help='input batch size')
+parser.add_argument('--num_points', type=int, default=1024, help='number of points in each input point cloud')
+parser.add_argument('--workers', type=int, help='number of data loading workers', default=4)
+parser.add_argument('--nepoch', type=int, default=250, help='number of epochs to train for')
+parser.add_argument('--outf', type=str, default='cls', help='output folder to save results')
+parser.add_argument('--model', type=str, default='', help='path to load a pre-trained model')
+parser.add_argument('--feature_transform', action='store_true', help='use feature transform')
 
+# Parse the command-line arguments
 opt = parser.parse_args()
 print(opt)
 
-blue = lambda x: '\033[94m' + x + '\033[0m'
+
+# Set random seed for reproducibility
 opt.manualSeed = random.randint(1, 10000)  # fix seed
 print("Random Seed: ", opt.manualSeed)
 random.seed(opt.manualSeed)
 torch.manual_seed(opt.manualSeed)
 
+# Function to load CLIP model and preprocessing function
+def load_clip_model():
+    clip_model, preprocess = open_clip.load('ViT-B/32', device=device)
+    return clip_model, preprocess
 
-## dataset and dataloader
+# Function to create Realistic Projection object
+def create_projection():
+    proj = Realistic_Projection()
+    return proj
 
-# if opt.dataset_type == 'shapenet':
-#     dataset = ShapeNetDataset(
-#         root=opt.dataset,
-#         classification=True,
-#         npoints=opt.num_points)
+# Load CLIP model and preprocessing function
+clip_model, clip_preprocess = load_clip_model()
 
-#     test_dataset = ShapeNetDataset(
-#         root=opt.dataset,
-#         classification=True,
-#         split='test',
-#         npoints=opt.num_points,
-#         data_augmentation=False)
-# elif opt.dataset_type == 'modelnet40':
-#     dataset = ModelNetDataset(
-#         root=opt.dataset,
-#         npoints=opt.num_points,
-#         split='trainval')
+# Create Realistic Projection object
+proj = create_projection()
 
-#     test_dataset = ModelNetDataset(
-#         root=opt.dataset,
-#         split='test',
-#         npoints=opt.num_points,
-#         data_augmentation=False)
-# else:
-#     exit('wrong dataset type')
+# Load PointNet feature extractor
+feature_ext_3D = PointNetfeat(global_feat=True, feature_transform=opt.feature_transform)
 
+# Define the classifier architecture
+classifier = torch.nn.Sequential(
+    torch.nn.Linear(1024, 512),
+    torch.nn.BatchNorm1d(512),
+    torch.nn.ReLU(),
+    torch.nn.Linear(512, 256),
+    torch.nn.BatchNorm1d(256),
+    torch.nn.ReLU(),
+    torch.nn.Linear(256, 40),
+)
 
-# dataloader = torch.utils.data.DataLoader(
-#     dataset,
-#     batch_size=opt.batchSize,
-#     shuffle=True,
-#     num_workers=int(opt.workers))
+# define optimzer for pointnet and classiifer but not clip
+parameters = list(feature_ext_3D.parameters()) + list(classifier.parameters())
 
-# testdataloader = torch.utils.data.DataLoader(
-#         test_dataset,
-#         batch_size=opt.batchSize,
-#         shuffle=True,
-#         num_workers=int(opt.workers))
+# Move the combined parameters to the selected device
+parameters = [param.to(device) for param in parameters]
 
-# print(len(dataset), len(test_dataset))
-# num_classes = len(dataset.classes)
-# print('classes', num_classes)
-
-# try:
-#     os.makedirs(opt.outf)
-# except OSError:
-#     pass
-
-classifier = PointNetCls(k=num_classes, feature_transform=opt.feature_transform)
-
-if opt.model != '':
-    classifier.load_state_dict(torch.load(opt.model))
-
-
-optimizer = optim.Adam(classifier.parameters(), lr=0.001, betas=(0.9, 0.999))
+# Define a single optimizer for both models
+optimizer = optim.Adam(parameters, lr=0.001, betas=(0.9, 0.999))  # Adjust learning rate if needed
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
-classifier.cuda()
+
 
 num_batch = len(dataset) / opt.batchSize
 
