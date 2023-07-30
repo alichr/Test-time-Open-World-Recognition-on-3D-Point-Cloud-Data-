@@ -6,11 +6,15 @@ import random
 import torch
 import torch.optim as optim
 import torch.utils.data
-from model.PointNet import PointNetfeat
+from model.PointNet import PointNetfeat, feature_transform_regularizer
 import torch.nn.functional as F
 from tqdm import tqdm
 import open_clip
 from utils.mv_utils_zs import Realistic_Projection
+
+
+
+################################################## Define parameters ##################################################
 
 # Check if a CUDA-enabled GPU is available, otherwise use CPU
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -36,10 +40,14 @@ print("Random Seed: ", opt.manualSeed)
 random.seed(opt.manualSeed)
 torch.manual_seed(opt.manualSeed)
 
+
+################################################## Define modles ##################################################
+
+
 # Function to load CLIP model and preprocessing function
 def load_clip_model():
-    clip_model, preprocess = open_clip.load('ViT-B/32', device=device)
-    return clip_model, preprocess
+    model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
+    return model, preprocess
 
 # Function to create Realistic Projection object
 def create_projection():
@@ -48,11 +56,11 @@ def create_projection():
 
 # Load CLIP model and preprocessing function
 clip_model, clip_preprocess = load_clip_model()
-
 # Create Realistic Projection object
 proj = create_projection()
-
-# Load PointNet feature extractor
+# vision encoder of clip in eval mode
+feature_ext_2D = clip_model.visual.to(device)
+# define PointNet feature extractor
 feature_ext_3D = PointNetfeat(global_feat=True, feature_transform=opt.feature_transform)
 
 # Define the classifier architecture
@@ -66,6 +74,8 @@ classifier = torch.nn.Sequential(
     torch.nn.Linear(256, 40),
 )
 
+
+################################################## Define optimizer ##################################################
 # define optimzer for pointnet and classiifer but not clip
 parameters = list(feature_ext_3D.parameters()) + list(classifier.parameters())
 
@@ -77,6 +87,8 @@ optimizer = optim.Adam(parameters, lr=0.001, betas=(0.9, 0.999))  # Adjust learn
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 
 
+################################################## training and evaluation ##################################################
+
 num_batch = len(dataset) / opt.batchSize
 
 for epoch in range(opt.nepoch):
@@ -87,12 +99,29 @@ for epoch in range(opt.nepoch):
         points = points.transpose(2, 1)
         points, target = points.cuda(), target.cuda()
         optimizer.zero_grad()
-        classifier = classifier.train()
-        pred, trans, trans_feat = classifier(points)
+
+        # extract 2D features from clip
+        with torch.no_grad():
+            # convert points to images
+            images = proj.points_to_images(points)
+            # convert images to clip input format
+            images = clip_preprocess(images)
+            # extract 2D features
+            features_2D = feature_ext_2D(images)    
+        
+        # extract 3D features from pointnet
+        features_3D = feature_ext_3D(points)
+        # concatenate 2D and 3D features
+        features = torch.cat((features_2D, features_3D), dim=1)
+        # classify
+        pred = classifier(features)
+        # compute loss
         loss = F.nll_loss(pred, target)
         if opt.feature_transform:
             loss += feature_transform_regularizer(trans_feat) * 0.001
+        # backpropagate
         loss.backward()
+        # update weights
         optimizer.step()
         pred_choice = pred.data.max(1)[1]
         correct = pred_choice.eq(target.data).cpu().sum()
@@ -104,8 +133,24 @@ for epoch in range(opt.nepoch):
             target = target[:, 0]
             points = points.transpose(2, 1)
             points, target = points.cuda(), target.cuda()
+            # define models in eval model to avoid batchnorm and dropout
+            feature_ext_3D = feature_ext_3D.eval()
+            feature_ext_2D = feature_ext_2D.eval()
             classifier = classifier.eval()
-            pred, _, _ = classifier(points)
+            # extract 2D features from clip
+            with torch.no_grad():
+                # convert points to images
+                images = proj.points_to_images(points)
+                # convert images to clip input format
+                images = clip_preprocess(images)
+                # extract 2D features
+                features_2D = feature_ext_2D(images)
+            # extract 3D features from pointnet
+            features_3D = feature_ext_3D(points)
+            # concatenate 2D and 3D features
+            features = torch.cat((features_2D, features_3D), dim=1)
+            # define classifier in eval mode to avoid batchnorm and dropout
+            pred = classifier(features)
             loss = F.nll_loss(pred, target)
             pred_choice = pred.data.max(1)[1]
             correct = pred_choice.eq(target.data).cpu().sum()
@@ -120,8 +165,23 @@ for i,data in tqdm(enumerate(testdataloader, 0)):
     target = target[:, 0]
     points = points.transpose(2, 1)
     points, target = points.cuda(), target.cuda()
+    feature_ext_3D = feature_ext_3D.eval()
+    feature_ext_2D = feature_ext_2D.eval()
     classifier = classifier.eval()
-    pred, _, _ = classifier(points)
+    with torch.no_grad():
+        # convert points to images
+        images = proj.points_to_images(points)
+        # convert images to clip input format
+        images = clip_preprocess(images)
+        # extract 2D features
+        features_2D = feature_ext_2D(images)
+    
+    # extract 3D features from pointnet
+    features_3D = feature_ext_3D(points)
+    # concatenate 2D and 3D features
+    features = torch.cat((features_2D, features_3D), dim=1)
+    # classifer
+    pred = classifier(features)
     pred_choice = pred.data.max(1)[1]
     correct = pred_choice.eq(target.data).cpu().sum()
     total_correct += correct.item()
