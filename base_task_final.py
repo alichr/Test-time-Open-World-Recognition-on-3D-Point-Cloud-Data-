@@ -12,6 +12,8 @@ from model.PointNet import PointNetfeat, feature_transform_regularizer
 def set_random_seed(seed):
     random.seed(seed)
     torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def load_clip_model():
@@ -59,6 +61,8 @@ def main(opt):
     optimizer = optim.Adam(parameters, lr=0.001, betas=(0.9, 0.999))  # Adjust learning rate if needed
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 
+    print(clip_model)
+
     num_batch = len(dataset) / opt.batchSize
 
     for epoch in range(opt.nepoch):
@@ -71,9 +75,9 @@ def main(opt):
             # Extract 2D features from clip
             features_2D = torch.zeros((points.shape[0], 512), device=device)
             with torch.no_grad():
-                for i in range(points.shape[0]):
+                for j in range(points.shape[0]):
                     # Project samples to an image
-                    pc_prj = proj.get_img(points[i,:,:].unsqueeze(0))
+                    pc_prj = proj.get_img(points[j,:,:].unsqueeze(0))
                     pc_img = torch.nn.functional.interpolate(pc_prj, size=(224, 224), mode='bilinear', align_corners=True)
                     pc_img = pc_img.to(device)
                     # Forward samples to the CLIP model
@@ -81,7 +85,7 @@ def main(opt):
                     # Average the features
                     pc_img_avg = torch.mean(pc_img, dim=0)
                     # Save feature vectors
-                    features_2D[i,:] = pc_img_avg
+                    features_2D[j,:] = pc_img_avg
 
             # Extract 3D features from PointNet
             points = points.transpose(2, 1)
@@ -110,7 +114,7 @@ def main(opt):
             print('[%d: %d/%d] train loss: %f accuracy: %f' % (epoch, i, num_batch, loss.item(), correct.item() / float(opt.batchSize)))
 
             if i % 10 == 0:
-                j, data = next(enumerate(testdataloader, 0))
+                k, data = next(enumerate(testdataloader, 0))
                 points, target = data
                 target = target[:, 0]
                 points, target = points.cuda(), target.cuda()
@@ -155,7 +159,6 @@ def main(opt):
     for i, data in tqdm(enumerate(testdataloader, 0)):
         points, target = data
         target = target[:, 0]
-        points = points.transpose(2, 1)
         points, target = points.cuda(), target.cuda()
         feature_ext_3D.eval()
         classifier.eval()
@@ -201,7 +204,7 @@ if __name__ == "__main__":
     parser.add_argument('--outf', type=str, default='cls', help='output folder to save results')
     parser.add_argument('--model', type=str, default='', help='path to load a pre-trained model')
     parser.add_argument('--feature_transform', action='store_true', help='use feature transform')
-    parser.add_argument('--manualSeed', type=int, default=random.randint(1, 10000), help='random seed')
+    parser.add_argument('--manualSeed', type=int, default = 42, help='random seed')
     opt = parser.parse_args()
 
     print(opt)
