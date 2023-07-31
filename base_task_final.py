@@ -1,3 +1,4 @@
+
 import argparse
 import random
 import torch
@@ -40,7 +41,7 @@ def main(opt):
     # Load CLIP model and preprocessing function
     clip_model, clip_preprocess = load_clip_model()
     # Create Realistic Projection object
-    proj = create_projection()
+    proj = create_projection().to(device)
     # Define PointNet feature extractor
     feature_ext_3D = PointNetfeat(global_feat=True, feature_transform=opt.feature_transform).to(device)
 
@@ -60,8 +61,6 @@ def main(opt):
     parameters = [param.to(device) for param in parameters]
     optimizer = optim.Adam(parameters, lr=0.001, betas=(0.9, 0.999))  # Adjust learning rate if needed
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
-
-    print(clip_model)
 
     num_batch = len(dataset) / opt.batchSize
 
