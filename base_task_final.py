@@ -32,6 +32,9 @@ def main(opt):
     set_random_seed(opt.manualSeed)
     print("Random Seed:", opt.manualSeed)
 
+    # deine data loader
+    
+
     # Load CLIP model and preprocessing function
     clip_model, clip_preprocess = load_clip_model()
     # Create Realistic Projection object
@@ -60,7 +63,7 @@ def main(opt):
 
     for epoch in range(opt.nepoch):
         for i, data in enumerate(dataloader, 0):
-            points, target = data
+            points, target = data # points = (BathcSize, 1024, 3), target = (BatchSize, 1)
             target = target[:, 0]
             points, target = points.cuda(), target.cuda()
             optimizer.zero_grad()
