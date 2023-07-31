@@ -58,14 +58,12 @@ def create_projection():
 clip_model, clip_preprocess = load_clip_model()
 # Create Realistic Projection object
 proj = create_projection()
-# vision encoder of clip in eval mode
-feature_ext_2D = clip_model.visual.to(device)
 # define PointNet feature extractor
-feature_ext_3D = PointNetfeat(global_feat=True, feature_transform=opt.feature_transform)
+feature_ext_3D = PointNetfeat(global_feat=True, feature_transform=opt.feature_transform).to(device)
 
 # Define the classifier architecture
 classifier = torch.nn.Sequential(
-    torch.nn.Linear(1024, 512),
+    torch.nn.Linear(1536, 512),
     torch.nn.BatchNorm1d(512),
     torch.nn.ReLU(),
     torch.nn.Linear(512, 256),
@@ -89,28 +87,37 @@ scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 
 ################################################## training and evaluation ##################################################
 
+
+
+
 num_batch = len(dataset) / opt.batchSize
 
+
+     
 for epoch in range(opt.nepoch):
-    scheduler.step()
+
     for i, data in enumerate(dataloader, 0):
         points, target = data
         target = target[:, 0]
-        points = points.transpose(2, 1)
         points, target = points.cuda(), target.cuda()
         optimizer.zero_grad()
-
         # extract 2D features from clip
+        features_2D = torch.zeros((points.shape[0], 512))
         with torch.no_grad():
-            # convert points to images
-            images = proj.points_to_images(points)
-            # convert images to clip input format
-            images = clip_preprocess(images)
-            # extract 2D features
-            features_2D = feature_ext_2D(images)    
-        
+            for i in range(points.shape[0]):
+            # Project samples to an image
+                pc_prj = proj.get_img(points[i,:,:].unsqueeze(0))
+                pc_img = torch.nn.functional.interpolate(pc_prj, size=(224, 224), mode='bilinear', align_corners=True)  
+                pc_img = pc_img.to(device)
+                # Forward samples to the CLIP model
+                pc_img = clip_model.encode_image(pc_img).to(device)
+                # Average the features
+                pc_img_avg = torch.mean(pc_img, dim=0)   
+                # Save feature vectors
+                features_2D[i,:] = pc_img_avg
         # extract 3D features from pointnet
-        features_3D = feature_ext_3D(points)
+        points = points.transpose(2, 1)
+        features_3D, trans, trans_feat = feature_ext_3D(points)
         # concatenate 2D and 3D features
         features = torch.cat((features_2D, features_3D), dim=1)
         # classify
@@ -123,33 +130,39 @@ for epoch in range(opt.nepoch):
         loss.backward()
         # update weights
         optimizer.step()
+        scheduler.step()
         pred_choice = pred.data.max(1)[1]
         correct = pred_choice.eq(target.data).cpu().sum()
         print('[%d: %d/%d] train loss: %f accuracy: %f' % (epoch, i, num_batch, loss.item(), correct.item() / float(opt.batchSize)))
-
         if i % 10 == 0:
             j, data = next(enumerate(testdataloader, 0))
             points, target = data
             target = target[:, 0]
-            points = points.transpose(2, 1)
             points, target = points.cuda(), target.cuda()
             # define models in eval model to avoid batchnorm and dropout
             feature_ext_3D = feature_ext_3D.eval()
             feature_ext_2D = feature_ext_2D.eval()
             classifier = classifier.eval()
             # extract 2D features from clip
+            features_2D = torch.zeros((points.shape[0], 512))
             with torch.no_grad():
-                # convert points to images
-                images = proj.points_to_images(points)
-                # convert images to clip input format
-                images = clip_preprocess(images)
-                # extract 2D features
-                features_2D = feature_ext_2D(images)
+                for i in range(points.shape[0]):
+                # Project samples to an image
+                    pc_prj = proj.get_img(points[i,:,:].unsqueeze(0))
+                    pc_img = torch.nn.functional.interpolate(pc_prj, size=(224, 224), mode='bilinear', align_corners=True)  
+                    pc_img = pc_img.to(device)
+                    # Forward samples to the CLIP model
+                    pc_img = clip_model.encode_image(pc_img).to(device)
+                    # Average the features
+                    pc_img_avg = torch.mean(pc_img, dim=0)   
+                    # Save feature vectors
+                    features_2D[i,:] = pc_img_avg
             # extract 3D features from pointnet
-            features_3D = feature_ext_3D(points)
+            points = points.transpose(2, 1)
+            features_3D, trans, trans_feat = feature_ext_3D(points)
             # concatenate 2D and 3D features
             features = torch.cat((features_2D, features_3D), dim=1)
-            # define classifier in eval mode to avoid batchnorm and dropout
+            # classify
             pred = classifier(features)
             loss = F.nll_loss(pred, target)
             pred_choice = pred.data.max(1)[1]
@@ -168,19 +181,25 @@ for i,data in tqdm(enumerate(testdataloader, 0)):
     feature_ext_3D = feature_ext_3D.eval()
     feature_ext_2D = feature_ext_2D.eval()
     classifier = classifier.eval()
+    features_2D = torch.zeros((points.shape[0], 512))
     with torch.no_grad():
-        # convert points to images
-        images = proj.points_to_images(points)
-        # convert images to clip input format
-        images = clip_preprocess(images)
-        # extract 2D features
-        features_2D = feature_ext_2D(images)
-    
-    # extract 3D features from pointnet
-    features_3D = feature_ext_3D(points)
-    # concatenate 2D and 3D features
+        for i in range(points.shape[0]):
+        # Project samples to an image
+            pc_prj = proj.get_img(points[i,:,:].unsqueeze(0))
+            pc_img = torch.nn.functional.interpolate(pc_prj, size=(224, 224), mode='bilinear', align_corners=True)  
+            pc_img = pc_img.to(device)
+            # Forward samples to the CLIP model
+            pc_img = clip_model.encode_image(pc_img).to(device)
+            # Average the features
+            pc_img_avg = torch.mean(pc_img, dim=0)   
+            # Save feature vectors
+            features_2D[i,:] = pc_img_avg
+            # extract 3D features from pointnet
+    points = points.transpose(2, 1)
+    features_3D, trans, trans_feat = feature_ext_3D(points)
+            # concatenate 2D and 3D features
     features = torch.cat((features_2D, features_3D), dim=1)
-    # classifer
+            # classify
     pred = classifier(features)
     pred_choice = pred.data.max(1)[1]
     correct = pred_choice.eq(target.data).cpu().sum()
