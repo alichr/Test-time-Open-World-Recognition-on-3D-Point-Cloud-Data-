@@ -10,6 +10,9 @@ from utils.mv_utils_zs import Realistic_Projection
 from model.PointNet import PointNetfeat, feature_transform_regularizer
 
 
+
+
+
 def set_random_seed(seed):
     random.seed(seed)
     torch.manual_seed(seed)
@@ -36,6 +39,9 @@ def main(opt):
     print("Random Seed:", opt.manualSeed)
 
     # deine data loader
+
+
+
     
 
     # Load CLIP model and preprocessing function
