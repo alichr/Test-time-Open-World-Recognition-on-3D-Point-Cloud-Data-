@@ -8,6 +8,7 @@ from tqdm import tqdm
 import open_clip
 from utils.mv_utils_zs import Realistic_Projection
 from model.PointNet import PointNetfeat, feature_transform_regularizer
+from utils.dataloader import *
 
 
 
@@ -39,6 +40,13 @@ def main(opt):
     print("Random Seed:", opt.manualSeed)
 
     # deine data loader
+    path = Path(opt.dataset_path)
+
+    dataloader=DatasetGen(opt, root=path, fewshot=argument.fewshot)
+    t = 0
+    dataset = dataloader.get(t,'training')
+    trainloader = dataset[t]['train']
+    testloader = dataset[t]['test'] 
 
 
 
