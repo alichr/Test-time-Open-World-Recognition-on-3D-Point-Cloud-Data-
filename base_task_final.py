@@ -42,6 +42,8 @@ def main(opt):
     # deine data loader
     path = Path(opt.dataset_path)
 
+    stop
+
     dataloader=DatasetGen(opt, root=path, fewshot=argument.fewshot)
     t = 0
     dataset = dataloader.get(t,'training')
