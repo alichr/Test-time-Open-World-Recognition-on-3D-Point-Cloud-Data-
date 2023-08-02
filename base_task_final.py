@@ -223,6 +223,8 @@ if __name__ == "__main__":
     parser.add_argument('--ntasks', type=str, default= '1', help="number of tasks")
     parser.add_argument('--nclasses', type=str, default= '26', help="number of classes")
     parser.add_argument('--task', type=str, default= '0', help="task number")
+    parser.add_argument('--num_samples', type=str, default= '0', help="number of samples per class")
+
     opt = parser.parse_args()
 
     ########### constant
