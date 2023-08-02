@@ -48,6 +48,7 @@ def main(opt):
     dataset = dataloader.get(t,'training')
     trainloader = dataset[t]['train']
     testloader = dataset[t]['test'] 
+    print(trainloader)
     stop
 
 
