@@ -41,15 +41,14 @@ def main(opt):
 
     # deine data loader
     path = Path(opt.dataset_path)
-
-    stop
+    print(path)
 
     dataloader=DatasetGen(opt, root=path, fewshot=argument.fewshot)
     t = 0
     dataset = dataloader.get(t,'training')
     trainloader = dataset[t]['train']
     testloader = dataset[t]['test'] 
-
+    stop
 
 
     
@@ -212,7 +211,7 @@ def main(opt):
 if __name__ == "__main__":
     # Set up command-line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batchSize', type=int, default=32, help='input batch size')
+    parser.add_argument('--batch_size', type=int, default=32, help='input batch size')
     parser.add_argument('--num_points', type=int, default=1024, help='number of points in each input point cloud')
     parser.add_argument('--workers', type=int, help='number of data loading workers', default=4)
     parser.add_argument('--nepoch', type=int, default=250, help='number of epochs to train for')
@@ -220,7 +219,14 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str, default='', help='path to load a pre-trained model')
     parser.add_argument('--feature_transform', action='store_true', help='use feature transform')
     parser.add_argument('--manualSeed', type=int, default = 42, help='random seed')
+    parser.add_argument('--dataset_path', type=str, default= 'dataset/modelnet_scanobjectnn/', help="dataset path")
+    parser.add_argument('--ntasks', type=str, default= '1', help="number of tasks")
+    parser.add_argument('--nclasses', type=str, default= '26', help="number of classes")
+    parser.add_argument('--task', type=str, default= '0', help="task number")
     opt = parser.parse_args()
+
+    ########### constant
+
 
     print(opt)
     main(opt)
