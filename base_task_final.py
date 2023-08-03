@@ -48,7 +48,7 @@ def main(opt):
     dataset = dataloader.get(t,'training')
     trainloader = dataset[t]['train']
     testloader = dataset[t]['test'] 
-    print(trainloader)
+    print(trainloader.__len__())
     stop
 
 
@@ -57,7 +57,7 @@ def main(opt):
     # Load CLIP model and preprocessing function
     clip_model, clip_preprocess = load_clip_model()
     # Create Realistic Projection object
-    proj = create_projection().to(device)
+    proj = create_projection()
     # Define PointNet feature extractor
     feature_ext_3D = PointNetfeat(global_feat=True, feature_transform=opt.feature_transform).to(device)
 
@@ -77,11 +77,14 @@ def main(opt):
     parameters = [param.to(device) for param in parameters]
     optimizer = optim.Adam(parameters, lr=0.001, betas=(0.9, 0.999))  # Adjust learning rate if needed
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
+    
+    num_batch = len(trainloader) / opt.batch_size
 
-    num_batch = len(dataset) / opt.batchSize
+    print(num_batch)
+
 
     for epoch in range(opt.nepoch):
-        for i, data in enumerate(dataloader, 0):
+        for i, data in enumerate(trainloader, 0):
             points, target = data # points = (BathcSize, 1024, 3), target = (BatchSize, 1)
             target = target[:, 0]
             points, target = points.cuda(), target.cuda()
