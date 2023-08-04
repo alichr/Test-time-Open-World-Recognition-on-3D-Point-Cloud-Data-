@@ -16,6 +16,8 @@ import random
 from torchvision import transforms, utils,datasets, models
 import sys
 
+# print current directory
+print(os.getcwd())
 
 
 ########### constant
@@ -256,7 +258,7 @@ transformation = transforms.Compose([
 
 
 class argument():
-    dataset_path =  "../data/modelnet_scanobjectnn/"
+    dataset_path =  "dataset/modelnet_scanobjectnn/"
     #r'C:\Users\24723266\OneDrive - UTS\Documents\GitHub\test\modelnet_scanobjectnn'
     # 
     lr = 1e-3

@@ -48,11 +48,6 @@ def main(opt):
     dataset = dataloader.get(t,'training')
     trainloader = dataset[t]['train']
     testloader = dataset[t]['test'] 
-    print(trainloader.__len__())
-    stop
-
-
-    
 
     # Load CLIP model and preprocessing function
     clip_model, clip_preprocess = load_clip_model()
@@ -79,13 +74,14 @@ def main(opt):
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     
     num_batch = len(trainloader) / opt.batch_size
-
-    print(num_batch)
-
-
     for epoch in range(opt.nepoch):
+        # t = tqdm(enumerate(trainloader, 0), total=len(trainloader), smoothing=0.9, position=0, leave=True, desc="Train: Epoch: "+str(epoch+1))
+        # print(t)
+        
         for i, data in enumerate(trainloader, 0):
-            points, target = data # points = (BathcSize, 1024, 3), target = (BatchSize, 1)
+            inputs, labels = data['pointclouds'].to(device).float(), data['labels'].to(device)
+            stop
+          #  points, target = data # points = (BathcSize, 1024, 3), target = (BatchSize, 1)
             target = target[:, 0]
             points, target = points.cuda(), target.cuda()
             optimizer.zero_grad()
