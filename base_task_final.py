@@ -11,9 +11,6 @@ from model.PointNet import PointNetfeat, feature_transform_regularizer
 from utils.dataloader import *
 
 
-
-
-
 def set_random_seed(seed):
     random.seed(seed)
     torch.manual_seed(seed)
