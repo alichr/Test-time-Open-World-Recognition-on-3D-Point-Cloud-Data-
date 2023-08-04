@@ -43,7 +43,7 @@ def main(opt):
     path = Path(opt.dataset_path)
     print(path)
 
-    dataloader=DatasetGen(opt, root=path, fewshot=argument.fewshot)
+    dataloader = DatasetGen(opt, root=path, fewshot=argument.fewshot)
     t = 0
     dataset = dataloader.get(t,'training')
     trainloader = dataset[t]['train']
@@ -78,7 +78,7 @@ def main(opt):
         # t = tqdm(enumerate(trainloader, 0), total=len(trainloader), smoothing=0.9, position=0, leave=True, desc="Train: Epoch: "+str(epoch+1))
         # print(t)
         
-        for i, data in enumerate(trainloader, 0):
+        for i, data in enumerate(trainloader, 1):
             inputs, labels = data['pointclouds'].to(device).float(), data['labels'].to(device)
             stop
           #  points, target = data # points = (BathcSize, 1024, 3), target = (BatchSize, 1)
