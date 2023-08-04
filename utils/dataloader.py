@@ -288,6 +288,7 @@ if __name__ == "__main__":
   
   dataset = dataloader.get(t,'training')
   trainloader = dataset[t]['train']
+  print(trainloader.__len__())
   testloader = dataset[t]['test'] 
   
   Train_Data = next(iter(trainloader))
