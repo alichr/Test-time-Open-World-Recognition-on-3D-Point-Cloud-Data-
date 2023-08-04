@@ -17,7 +17,7 @@ from torchvision import transforms, utils,datasets, models
 import sys
 
 # print current directory
-print(os.getcwd())
+
 
 
 ########### constant
@@ -303,9 +303,6 @@ if __name__ == "__main__":
   print(torch.load(Test_Data['pcd_path'][10]))
   LengthDataTest = testloader.batch_sampler.sampler.num_samples
   
-  for i, data in enumerate(trainloader, 1):
-            inputs, labels = data['pointclouds'].to(device).float(), data['labels'].to(device)
-            stop
   
   
   LengthDataTrain2 = len(trainloader.dataset.files)

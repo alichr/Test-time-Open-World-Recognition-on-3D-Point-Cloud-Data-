@@ -47,6 +47,8 @@ def main(opt):
     t = 0
     dataset = dataloader.get(t,'training')
     trainloader = dataset[t]['train']
+
+    
     testloader = dataset[t]['test'] 
 
     # Load CLIP model and preprocessing function
@@ -64,7 +66,7 @@ def main(opt):
         torch.nn.Linear(512, 256),
         torch.nn.BatchNorm1d(256),
         torch.nn.ReLU(),
-        torch.nn.Linear(256, 40),
+        torch.nn.Linear(256, 26),
     ).to(device)
 
     # Define optimizer for PointNet and classifier
@@ -73,17 +75,14 @@ def main(opt):
     optimizer = optim.Adam(parameters, lr=0.001, betas=(0.9, 0.999))  # Adjust learning rate if needed
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     
-    num_batch = len(trainloader) / opt.batch_size
+    num_batch = len(trainloader)
     for epoch in range(opt.nepoch):
         # t = tqdm(enumerate(trainloader, 0), total=len(trainloader), smoothing=0.9, position=0, leave=True, desc="Train: Epoch: "+str(epoch+1))
         # print(t)
         
-        for i, data in enumerate(trainloader, 1):
-            inputs, labels = data['pointclouds'].to(device).float(), data['labels'].to(device)
-            stop
-          #  points, target = data # points = (BathcSize, 1024, 3), target = (BatchSize, 1)
-            target = target[:, 0]
-            points, target = points.cuda(), target.cuda()
+        for i, data in enumerate(trainloader, 0):
+            points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
+            points, target = points.to(device), target.to(device)
             optimizer.zero_grad()
 
             # Extract 2D features from clip
@@ -105,14 +104,16 @@ def main(opt):
             points = points.transpose(2, 1)
             features_3D, trans, trans_feat = feature_ext_3D(points)
 
+            
             # Concatenate 2D and 3D features
             features = torch.cat((features_2D, features_3D), dim=1)
+    
 
             # Classify
             pred = classifier(features)
 
             # Compute loss
-            loss = F.nll_loss(pred, target)
+            loss = F.nll_loss(F.log_softmax(pred, dim=1), target)
             if opt.feature_transform:
                 loss += feature_transform_regularizer(trans_feat) * 0.001
 
@@ -125,48 +126,47 @@ def main(opt):
 
             pred_choice = pred.data.max(1)[1]
             correct = pred_choice.eq(target.data).cpu().sum()
-            print('[%d: %d/%d] train loss: %f accuracy: %f' % (epoch, i, num_batch, loss.item(), correct.item() / float(opt.batchSize)))
+            print('[%d: %d/%d] train loss: %f accuracy: %f' % (epoch, i, num_batch, loss.item(), correct.item() / float(opt.batch_size)))
+        #     if i % 10 == 0:
+        #         k, data = next(enumerate(testloader, 0))
+        #         points, target = data
+        #         target = target[:, 0]
+        #         points, target = points.cuda(), target.cuda()
 
-            if i % 10 == 0:
-                k, data = next(enumerate(testdataloader, 0))
-                points, target = data
-                target = target[:, 0]
-                points, target = points.cuda(), target.cuda()
+        #         # Set models to eval mode to avoid batchnorm and dropout
+        #         feature_ext_3D.eval()
+        #         classifier.eval()
 
-                # Set models to eval mode to avoid batchnorm and dropout
-                feature_ext_3D.eval()
-                classifier.eval()
+        #         # Extract 2D features from clip
+        #         features_2D = torch.zeros((points.shape[0], 512), device=device)
+        #         with torch.no_grad():
+        #             for i in range(points.shape[0]):
+        #                 # Project samples to an image
+        #                 pc_prj = proj.get_img(points[i,:,:].unsqueeze(0))
+        #                 pc_img = torch.nn.functional.interpolate(pc_prj, size=(224, 224), mode='bilinear', align_corners=True)
+        #                 pc_img = pc_img.to(device)
+        #                 # Forward samples to the CLIP model
+        #                 pc_img = clip_model.encode_image(pc_img).to(device)
+        #                 # Average the features
+        #                 pc_img_avg = torch.mean(pc_img, dim=0)
+        #                 # Save feature vectors
+        #                 features_2D[i,:] = pc_img_avg
 
-                # Extract 2D features from clip
-                features_2D = torch.zeros((points.shape[0], 512), device=device)
-                with torch.no_grad():
-                    for i in range(points.shape[0]):
-                        # Project samples to an image
-                        pc_prj = proj.get_img(points[i,:,:].unsqueeze(0))
-                        pc_img = torch.nn.functional.interpolate(pc_prj, size=(224, 224), mode='bilinear', align_corners=True)
-                        pc_img = pc_img.to(device)
-                        # Forward samples to the CLIP model
-                        pc_img = clip_model.encode_image(pc_img).to(device)
-                        # Average the features
-                        pc_img_avg = torch.mean(pc_img, dim=0)
-                        # Save feature vectors
-                        features_2D[i,:] = pc_img_avg
+        #         # Extract 3D features from PointNet
+        #         points = points.transpose(2, 1)
+        #         features_3D, _, _ = feature_ext_3D(points)
 
-                # Extract 3D features from PointNet
-                points = points.transpose(2, 1)
-                features_3D, _, _ = feature_ext_3D(points)
+        #         # Concatenate 2D and 3D features
+        #         features = torch.cat((features_2D, features_3D), dim=1)
 
-                # Concatenate 2D and 3D features
-                features = torch.cat((features_2D, features_3D), dim=1)
+        #         # Classify
+        #         pred = classifier(features)
+        #         loss = F.nll_loss(pred, target)
+        #         pred_choice = pred.data.max(1)[1]
+        #         correct = pred_choice.eq(target.data).cpu().sum()
+        #         print('[%d: %d/%d] test loss: %f accuracy: %f' % (epoch, i, num_batch, loss.item(), correct.item()/float(opt.batch_size)))
 
-                # Classify
-                pred = classifier(features)
-                loss = F.nll_loss(pred, target)
-                pred_choice = pred.data.max(1)[1]
-                correct = pred_choice.eq(target.data).cpu().sum()
-                print('[%d: %d/%d] test loss: %f accuracy: %f' % (epoch, i, num_batch, loss.item(), correct.item()/float(opt.batchSize)))
-
-        torch.save(classifier.state_dict(), '%s/cls_model_%d.pth' % (opt.outf, epoch))
+        # torch.save(classifier.state_dict(), '%s/cls_model_%d.pth' % (opt.outf, epoch))
 
     total_correct = 0
     total_testset = 0
