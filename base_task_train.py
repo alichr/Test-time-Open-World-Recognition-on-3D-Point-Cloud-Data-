@@ -28,6 +28,12 @@ def create_projection():
     return proj
 
 
+# multiply two numay arrays
+def multiply(a, b):
+    return a * b
+
+
+
 def main(opt):
     # Check if a CUDA-enabled GPU is available, otherwise use CPU
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -158,7 +164,8 @@ def main(opt):
                 pred_choice = pred.data.max(1)[1]
                 correct = pred_choice.eq(target.data).cpu().sum()
                 print('[%d: %d/%d] test loss: %f accuracy: %f' % (epoch, i, num_batch, loss.item(), correct.item()/float(opt.batch_size)))
-
+        
+        torch.save(feature_ext_3D.state_dict(), '%s/3D_model_%d.pth' % (opt.outf, epoch))
         torch.save(classifier.state_dict(), '%s/cls_model_%d.pth' % (opt.outf, epoch))
 
     total_correct = 0
@@ -216,6 +223,7 @@ if __name__ == "__main__":
     parser.add_argument('--nclasses', type=str, default= '26', help="number of classes")
     parser.add_argument('--task', type=str, default= '0', help="task number")
     parser.add_argument('--num_samples', type=str, default= '0', help="number of samples per class")
+
 
     opt = parser.parse_args()
 
