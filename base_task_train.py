@@ -123,7 +123,7 @@ def main(opt):
 
             # Update weights
             optimizer.step()
-            scheduler.step()
+          #  scheduler.step()
 
             pred_choice = pred.data.max(1)[1]
             correct = pred_choice.eq(target.data).cpu().sum()
