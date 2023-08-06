@@ -56,6 +56,7 @@ def main(opt):
 
     # Load CLIP model and preprocessing function
     clip_model, clip_preprocess = load_clip_model()
+    clip_model = clip_model.to(device)
     # Create Realistic Projection object
     proj = create_projection()
     # Define PointNet feature extractor

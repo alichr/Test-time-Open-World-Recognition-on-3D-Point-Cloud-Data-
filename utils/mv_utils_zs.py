@@ -26,13 +26,13 @@ class Grid2Image(nn.Module):
 
         self.maxpool = nn.MaxPool3d((params['maxpoolz'], params['maxpoolxy'], params['maxpoolxy']), 
                                     stride=1, padding=(params['maxpoolpadz'], params['maxpoolpadxy'], 
-                                    params['maxpoolpadxy']))
+                                    params['maxpoolpadxy'])).to(device)
         self.conv = torch.nn.Conv3d(1, 1, kernel_size=(params['convz'], params['convxy'], params['convxy']),
                                     stride=1, padding=(params['convpadz'],params['convpadxy'],params['convpadxy']),
-                                    bias=True)
-        kn3d = get3DGaussianKernel(params['convxy'], params['convz'], sigma=params['convsigmaxy'], zsigma=params['convsigmaz'])
-        self.conv.weight.data = torch.Tensor(kn3d).repeat(1,1,1,1,1)
-        self.conv.bias.data.fill_(0)
+                                    bias=True).to(device)
+        kn3d = get3DGaussianKernel(params['convxy'], params['convz'], sigma=params['convsigmaxy'], zsigma=params['convsigmaz']).to(device)
+        self.conv.weight.data = torch.Tensor(kn3d).repeat(1,1,1,1,1).to(device)
+        self.conv.bias.data.fill_(0).to(device)
             
     def forward(self, x):
         x = self.maxpool(x.unsqueeze(1))
