@@ -165,7 +165,8 @@ def main(opt):
                 pred_choice = pred.data.max(1)[1]
                 correct = pred_choice.eq(target.data).cpu().sum()
                 print('[%d: %d/%d] test loss: %f accuracy: %f' % (epoch, i, num_batch, loss.item(), correct.item()/float(opt.batch_size)))
-        
+               
+                
         torch.save(feature_ext_3D.state_dict(), '%s/3D_model_%d.pth' % (opt.outf, epoch))
         torch.save(classifier.state_dict(), '%s/cls_model_%d.pth' % (opt.outf, epoch))
 
@@ -206,6 +207,12 @@ def main(opt):
         total_testset += points.size()[0]
 
     print("final accuracy:", total_correct / float(total_testset))
+     # save results and paramerts of model in a log file
+    f = open("log.txt", "a")
+    f.write("final accuracy: %f" % (total_correct / float(total_testset)))
+    f.close()
+    
+ 
 
 
 if __name__ == "__main__":
