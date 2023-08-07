@@ -3,6 +3,10 @@ import torch
 import torch.nn as nn
 from PIL import Image
 from sklearn.cluster import KMeans
+import argparse
+from utils.dataloader import *
+from pathlib import Path
+from model.PointNet import PointNetfeat, feature_transform_regularizer
 
 # Import any other required modules for the dataset and dataloader if needed
 # (These parts are currently commented out)
@@ -13,6 +17,18 @@ from utils.mv_utils_zs import Realistic_Projection
 # Check if a CUDA-enabled GPU is available, otherwise use CPU
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
  
+
+# define a function for pointnet
+def pointnet():
+    """
+    Create and return a PointNet model.
+
+    Returns:
+    - model: The PointNet model.
+    """
+    model = PointNetfeat(global_feat=True, feature_transform=True)
+    return model
+
 
 ## Define CLIP model
 def clip_model():
@@ -87,8 +103,9 @@ def SVD(X, n_components=10):
     return U[:, :n_components], S, V
 
 
+
 ## Define main function
-def main():
+def main(opt):
     """
     Main function to execute the clustering process.
 
@@ -99,6 +116,20 @@ def main():
     4. Forward samples through the CLIP model to get feature vectors.
     5. Cluster the feature vectors using KMeans.
     """
+
+    # deine data loader
+    path = Path(opt.dataset_path)
+
+    dataloader = DatasetGen(opt, root=path, fewshot=argument.fewshot)
+    t = 0
+    dataset = dataloader.get(t,'training')
+    trainloader = dataset[t]['train']
+
+    # Step 0: Load PointNet model
+    model = pointnet()
+    model = model.to(device)
+    model.load_state_dict(torch.load(opt.model_path))
+
     # Step 1: Load CLIP model
     model, preprocess = clip_model()
 
@@ -106,15 +137,17 @@ def main():
     proj = projection()
 
     # Step 3: Create 100 random samples using torch
-    pc = torch.rand(100, 1024, 3)
+    
     # Define a feature vectors size (100, 512)
     feature_vectors = np.zeros((100, 512))
 
     # Step 4: Forward samples to the CLIP model
     with torch.no_grad():
-        for i in range(100):
+        for i, data in enumerate(trainloader, 0):
+            points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
+            points, target = points.to(device), target.to(device)
             # Project samples to an image
-            pc_prj = proj.get_img(pc[i,:,:].unsqueeze(0))
+            pc_prj = proj.get_img(points.unsqueeze(0))
             pc_img = torch.nn.functional.interpolate(pc_prj, size=(224, 224), mode='bilinear', align_corners=True)  
             pc_img = pc_img.to(device)
             # Forward samples to the CLIP model
@@ -141,6 +174,24 @@ def main():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--batch_size', type=int, default=1, help='input batch size')
+    parser.add_argument('--num_points', type=int, default=1024, help='number of points in each input point cloud')
+    parser.add_argument('--workers', type=int, help='number of data loading workers', default=4)
+    parser.add_argument('--nepoch', type=int, default=250, help='number of epochs to train for')
+    parser.add_argument('--outf', type=str, default='cls', help='output folder to save results')
+    parser.add_argument('--model', type=str, default='', help='path to load a pre-trained model')
+    parser.add_argument('--feature_transform', action='store_true', help='use feature transform')
+    parser.add_argument('--manualSeed', type=int, default = 42, help='random seed')
+    parser.add_argument('--dataset_path', type=str, default= 'dataset/modelnet_scanobjectnn/', help="dataset path")
+    parser.add_argument('--ntasks', type=str, default= '1', help="number of tasks")
+    parser.add_argument('--nclasses', type=str, default= '26', help="number of classes")
+    parser.add_argument('--task', type=str, default= '0', help="task number")
+    parser.add_argument('--num_samples', type=str, default= '0', help="number of samples per class")
+
+
+    opt = parser.parse_args()
+
     main()
     print("Done!")
 
