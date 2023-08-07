@@ -211,7 +211,7 @@ def main(opt):
     f = open("log.txt", "a")
     f.write("final accuracy: %f" % (total_correct / float(total_testset)))
     f.close()
-    
+
  
 
 
@@ -224,7 +224,7 @@ if __name__ == "__main__":
     parser.add_argument('--nepoch', type=int, default=250, help='number of epochs to train for')
     parser.add_argument('--outf', type=str, default='cls', help='output folder to save results')
     parser.add_argument('--model', type=str, default='', help='path to load a pre-trained model')
-    parser.add_argument('--feature_transform', action='store_true', help='use feature transform')
+    parser.add_argument('--feature_transform', default= 'True' , action='store_true', help='use feature transform')
     parser.add_argument('--manualSeed', type=int, default = 42, help='random seed')
     parser.add_argument('--dataset_path', type=str, default= 'dataset/modelnet_scanobjectnn/', help="dataset path")
     parser.add_argument('--ntasks', type=str, default= '1', help="number of tasks")

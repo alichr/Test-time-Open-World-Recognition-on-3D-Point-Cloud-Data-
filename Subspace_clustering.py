@@ -26,7 +26,8 @@ def pointnet():
     Returns:
     - model: The PointNet model.
     """
-    model = PointNetfeat(global_feat=True, feature_transform=True)
+   # PointNetfeat(global_feat=True, feature_transform=opt.feature_transform).to(device)
+    model = PointNetfeat(global_feat=True, feature_transform='store_true').to(device)
     return model
 
 
@@ -128,7 +129,14 @@ def main(opt):
     # Step 0: Load PointNet model
     model = pointnet()
     model = model.to(device)
-    model.load_state_dict(torch.load(opt.model_path))
+
+    print(model)
+
+  
+
+    ali = torch.load(opt.model, map_location=torch.device('cpu'))
+    print(ali.keys())
+    model.load_state_dict(torch.load(opt.model, map_location=torch.device('cpu')))
 
     # Step 1: Load CLIP model
     model, preprocess = clip_model()
@@ -180,7 +188,7 @@ if __name__ == "__main__":
     parser.add_argument('--workers', type=int, help='number of data loading workers', default=4)
     parser.add_argument('--nepoch', type=int, default=250, help='number of epochs to train for')
     parser.add_argument('--outf', type=str, default='cls', help='output folder to save results')
-    parser.add_argument('--model', type=str, default='', help='path to load a pre-trained model')
+    parser.add_argument('--model', type=str, default='cls/3D_model_249.pth', help='path to load a pre-trained model')
     parser.add_argument('--feature_transform', action='store_true', help='use feature transform')
     parser.add_argument('--manualSeed', type=int, default = 42, help='random seed')
     parser.add_argument('--dataset_path', type=str, default= 'dataset/modelnet_scanobjectnn/', help="dataset path")
@@ -192,7 +200,7 @@ if __name__ == "__main__":
 
     opt = parser.parse_args()
 
-    main()
+    main(opt)
     print("Done!")
 
  
