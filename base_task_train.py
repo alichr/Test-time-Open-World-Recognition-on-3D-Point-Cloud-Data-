@@ -44,7 +44,6 @@ def main(opt):
 
     # deine data loader
     path = Path(opt.dataset_path)
-    print(path)
 
     dataloader = DatasetGen(opt, root=path, fewshot=argument.fewshot)
     t = 0

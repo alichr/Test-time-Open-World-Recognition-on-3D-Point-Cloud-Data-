@@ -5,7 +5,6 @@ from PIL import Image
 from sklearn.cluster import KMeans
 import argparse
 from utils.dataloader import *
-from pathlib import Path
 from model.PointNet import PointNetfeat, feature_transform_regularizer
 
 # Import any other required modules for the dataset and dataloader if needed
@@ -27,7 +26,7 @@ def pointnet():
     - model: The PointNet model.
     """
    # PointNetfeat(global_feat=True, feature_transform=opt.feature_transform).to(device)
-    model = PointNetfeat(global_feat=True, feature_transform='store_true').to(device)
+    model = PointNetfeat(global_feat=True, feature_transform='True').to(device)
     return model
 
 
@@ -119,9 +118,7 @@ def main(opt):
     """
 
     # deine data loader
-    path = Path(opt.dataset_path)
-
-    dataloader = DatasetGen(opt, root=path, fewshot=argument.fewshot)
+    dataloader = DatasetGen(opt, root=Path(opt.dataset_path), fewshot=argument.fewshot)
     t = 0
     dataset = dataloader.get(t,'training')
     trainloader = dataset[t]['train']
@@ -131,40 +128,49 @@ def main(opt):
     model_3D = pointnet()
     model_3D = model_3D.to(device)
     model_3D.load_state_dict(torch.load(opt.model, map_location=torch.device('cpu')))
+    model_3D.eval()
 
     # Step 1: Load CLIP model
     model_2D, preprocess = clip_model()
-
+    model_2D = model_2D.to(device)
     # Step 2: Load Realistic Projection object
     proj = projection()
  
-    
-    # Step 3: Create 100 random samples using torch
-    
-    # Define a feature vectors size (100, 512)
-    feature_vectors = np.zeros((len(trainloader.dataset), 512))
+        
+    # Define a feature vectors size (len(trainloader.dataset, 512)
+    feature_2D = torch.zeros((len(trainloader.dataset), 512)).to(device)
+    feature_3D = torch.zeros((len(trainloader.dataset), 1024)).to(device)
+    feature = torch.zeros((len(trainloader.dataset), 1024 + 512)).to(device)
+
 
     # Step 4: Forward samples to the CLIP model
     with torch.no_grad():
         for i, data in enumerate(trainloader, 0):
+            print('sample:', i)
             points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
             points, target = points.to(device), target.to(device)
             # Project samples to an image
-            pc_prj = proj.get_img(points.unsqueeze(0))
+            pc_prj = proj.get_img(points)
             pc_img = torch.nn.functional.interpolate(pc_prj, size=(224, 224), mode='bilinear', align_corners=True)  
             pc_img = pc_img.to(device)
             # Forward samples to the CLIP model
             pc_img = model_2D.encode_image(pc_img)
-            pc_img = pc_img.cpu().numpy()
-            pc_img_avg = np.mean(pc_img, axis=0)        
-            # Save feature vectors
-            feature_vectors[i,:] = pc_img_avg
-            print(i)
-    
+            # Average the feature vectors
+            pc_img_avg = torch.mean(pc_img, dim=0)
+            feature_2D[i,:] = pc_img_avg
+            # 3D feature extraction
+            points = points.transpose(2, 1)
+            feature_3D[i,:], trans, trans_feat = model_3D(points)
+            # Concatenate 2D and 3D feature vectors torch
+            feature[i,:] = torch.cat((feature_2D[i,:], feature_3D[i,:]), 0)
+
+
+    # convert feature to numpy
+    feature_vectors = feature.cpu().numpy()
+
     # Step 5: Cluster samples
     kmeans = clustering(feature_vectors, n_clusters=10)
 
-    # number of clusters
 
     # Step6: seperate the clusters into different groups and apply SVD to each group and save each subsapce in a subsapce folder
     for i in range(kmeans.n_clusters):
@@ -180,7 +186,7 @@ def main(opt):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch_size', type=int, default=1, help='input batch size')
+    parser.add_argument('--batch_size', type=int, default= 1, help='input batch size')
     parser.add_argument('--num_points', type=int, default=1024, help='number of points in each input point cloud')
     parser.add_argument('--workers', type=int, help='number of data loading workers', default=4)
     parser.add_argument('--nepoch', type=int, default=250, help='number of epochs to train for')
