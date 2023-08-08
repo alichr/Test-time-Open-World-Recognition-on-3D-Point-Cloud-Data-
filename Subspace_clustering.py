@@ -126,28 +126,23 @@ def main(opt):
     dataset = dataloader.get(t,'training')
     trainloader = dataset[t]['train']
 
+
     # Step 0: Load PointNet model
-    model = pointnet()
-    model = model.to(device)
-
-    print(model)
-
-  
-
-    ali = torch.load(opt.model, map_location=torch.device('cpu'))
-    print(ali.keys())
-    model.load_state_dict(torch.load(opt.model, map_location=torch.device('cpu')))
+    model_3D = pointnet()
+    model_3D = model_3D.to(device)
+    model_3D.load_state_dict(torch.load(opt.model, map_location=torch.device('cpu')))
 
     # Step 1: Load CLIP model
-    model, preprocess = clip_model()
+    model_2D, preprocess = clip_model()
 
     # Step 2: Load Realistic Projection object
     proj = projection()
-
+ 
+    
     # Step 3: Create 100 random samples using torch
     
     # Define a feature vectors size (100, 512)
-    feature_vectors = np.zeros((100, 512))
+    feature_vectors = np.zeros((len(trainloader.dataset), 512))
 
     # Step 4: Forward samples to the CLIP model
     with torch.no_grad():
@@ -159,7 +154,7 @@ def main(opt):
             pc_img = torch.nn.functional.interpolate(pc_prj, size=(224, 224), mode='bilinear', align_corners=True)  
             pc_img = pc_img.to(device)
             # Forward samples to the CLIP model
-            pc_img = model.encode_image(pc_img)
+            pc_img = model_2D.encode_image(pc_img)
             pc_img = pc_img.cpu().numpy()
             pc_img_avg = np.mean(pc_img, axis=0)        
             # Save feature vectors
@@ -169,8 +164,10 @@ def main(opt):
     # Step 5: Cluster samples
     kmeans = clustering(feature_vectors, n_clusters=10)
 
+    # number of clusters
+
     # Step6: seperate the clusters into different groups and apply SVD to each group and save each subsapce in a subsapce folder
-    for i in range(10):
+    for i in range(kmeans.n_clusters):
         idx = np.where(kmeans.labels_ == i)[0]  # Use [0] to access the indices array from tuple
         cluster_feature_vectors = feature_vectors[idx]
         print(cluster_feature_vectors.shape)
