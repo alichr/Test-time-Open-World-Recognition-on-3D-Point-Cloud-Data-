@@ -59,31 +59,40 @@ def projection():
     return proj
 
 
-## Define subsapce mathcing function using subspace memory with the following formulation: distance = feature - (feature * subspace.T) * subspace
-def subspace_matching(features, Subsapce):
+## Define subsapce mathcing function using subspace memory with the following formulation: distance = norm(feature - (feature * subspace.T) * subspace)
+import torch
+
+def subspace_matching(features, Subspace):
     """
     Match features to a subspace memory.
 
     Args:
     - features: The features to match.
-    - Subsapce: The subspace memory.
+    - Subspace: The subspace memory.
+    - device: The device to use (e.g., 'cuda' or 'cpu').
 
     Returns:
     - distance: The distance between the features and the subspace memory.
     """
-    distance = torch.zeros((features.shape[0], len(Subsapce.keys())), device=device)
-    for i, key in enumerate(Subsapce.keys()):
-        distance[:,i] = torch.norm(features - torch.matmul(torch.matmul(features, torch.from_numpy(Subsapce[key]).to(device).float().transpose(0,1)), torch.from_numpy(Subsapce[key]).to(device).float()), dim=1)
+    distance = torch.zeros((features.shape[0], len(Subspace.keys())), device=device)
+    for i, key in enumerate(Subspace.keys()):
+        subspace_matrix = torch.from_numpy(Subspace[key]).to(device).float()
+        distance[:, i] = torch.norm(features - torch.matmul(torch.matmul(features, subspace_matrix), subspace_matrix.transpose(0, 1)), dim=1)
     return distance
+
+
+
+
 
 
 
 
 # define the main function
 def main(opt):
+    Distance = torch.zeros(1971)
     # deine data loader
     dataloader = DatasetGen(opt, root=Path(opt.dataset_path), fewshot=argument.fewshot)
-    t = 0
+    t = 1
     dataset = dataloader.get(t,'Test')
     testloader = dataset[t]['test']
     print("Test dataset size:", len(testloader.dataset))
@@ -120,7 +129,7 @@ def main(opt):
 
     total_correct = 0
     total_testset = 0
-    for i, data in tqdm(enumerate(testloader, 0)):
+    for j, data in tqdm(enumerate(testloader, 0)):
         points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
         points, target = points.to(device), target.to(device)
         feature_ext_3D.eval()
@@ -148,14 +157,14 @@ def main(opt):
         features = torch.cat((features_2D, features_3D), dim=1)
         
         # print subsapce shape
-        print(Subsapce['subspace1'].shape)
-        stop
+        print(Subsapce['subspace0'].shape)
         # subsapce matching
         distance = subspace_matching(features, Subsapce)
 
-        print(distance)
+        Distance[j] = torch.mean(distance)
 
-        stop
+        print('sample_' + str(j) + ':' , Distance[j])
+
 
         # Classify
         pred = classifier(features)
@@ -169,6 +178,13 @@ def main(opt):
     f = open("log.txt", "a")
     f.write("final accuracy: %f" % (total_correct / float(total_testset)))
     f.close()
+    # convert Distance array to numpy and save as npy file
+    Distance = Distance.cpu().detach().numpy()
+    np.save('Distance.npy', Distance)
+
+    # plot the Distance array
+    plt.plot(Distance)
+
 
 
  
