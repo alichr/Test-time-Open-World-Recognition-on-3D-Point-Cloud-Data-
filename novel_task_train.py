@@ -161,7 +161,7 @@ def main(opt):
         # subsapce matching
         distance = subspace_matching(features, Subsapce)
 
-        Distance[j] = torch.mean(distance)
+        Distance[j] = torch.max(distance)
 
         print('sample_' + str(j) + ':' , Distance[j])
 

@@ -2,20 +2,24 @@ import numpy as np
 import os
 
 
-# load subspace folder
-def subsapce():
+# import numpy array from a file
+def import_numpy_array(file):
     """
-    Create and return a subsapce memory.
+    Import a numpy array from a file.
+
+    Parameters:
+    - file: The file to import the array from.
+
+    Returns:
+    - array: The imported array.
     """
-    Subsapce = {}
-    for file in os.listdir("subspace/"): 
-        Subsapce[file[:-4]] = np.load("subspace/"+file)
-    return Subsapce
+    array = np.load(file)
+    return array
 
-Subsapce = subsapce()
-
-
-for i in range(len(Subsapce.keys())):
-    print(Subsapce['subspace'+str(i)].shape)
+vec = import_numpy_array("Distance.npy")
+# plot and show the array
+import matplotlib.pyplot as plt
+plt.plot(vec)
+plt.show()
 
 
