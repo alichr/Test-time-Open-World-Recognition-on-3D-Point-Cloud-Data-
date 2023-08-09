@@ -184,6 +184,9 @@ def main(opt):
 
     # plot the Distance array
     plt.plot(Distance)
+    plt.xlabel('sample')
+    plt.ylabel('Distance')
+    plt.show()
 
 
 
