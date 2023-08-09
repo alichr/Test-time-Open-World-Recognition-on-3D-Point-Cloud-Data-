@@ -1,69 +1,78 @@
-# PointNet Classifier with CLIP-based Features
+```markdown
+# PointNet with CLIP Features for Multi-View Object Classification
 
-This repository contains a PointNet classifier with CLIP-based features. The PointNet classifier is trained to classify 3D point clouds into one of the predefined classes, using the CLIP model to extract image features from the point clouds.
+This repository contains code for training a multi-view object classification model using PointNet with CLIP (Contrastive Language-Image Pretraining) features. The model combines 2D and 3D features to perform classification on 3D point cloud data.
 
 ## Prerequisites
 
-Before running the code, make sure you have the following prerequisites installed:
+- Python 3.6 or later
+- PyTorch 1.7 or later
+- CUDA-capable GPU (optional but recommended for faster training)
+- Other dependencies listed in `requirements.txt`
 
-- Python 3.x
-- PyTorch
-- TorchVision
-- NumPy
-- tqdm
-- OpenCLIP
+## Installation
 
-Install the required dependencies using `pip`:
+1. Clone this repository:
 
-```bash
-pip install torch torchvision numpy tqdm open_clip
-```
+   ```sh
+   git clone https://github.com/yourusername/pointnet-clip-object-classification.git
+   cd pointnet-clip-object-classification
+   ```
 
-## Getting Started
+2. Install the required packages using pip:
 
-Clone the repository and navigate to the project directory:
-
-```bash
-git clone <repository_url>
-cd <repository_directory>
-```
+   ```sh
+   pip install -r requirements.txt
+   ```
 
 ## Usage
 
-To train the PointNet classifier with CLIP-based features, use the following command:
+1. Train the PointNet-CLIP model:
 
-```bash
-python train.py
+   ```sh
+   python main.py --batch_size 32 --num_points 1024 --nepoch 250 --outf results
+   ```
+
+   Adjust the batch size, number of points, number of epochs, and output folder as needed.
+
+2. Evaluate the trained model:
+
+   ```sh
+   python main.py --batch_size 32 --num_points 1024 --model results/3D_model_X.pth --outf results --feature_transform
+   ```
+
+   Replace `X` with the epoch number of the trained model.
+
+3. View results:
+
+   Training and testing progress, as well as accuracy, will be displayed during training and saved to a `log.txt` file in the output folder.
+
+## Acknowledgments
+
+- This code builds upon the PointNet architecture and CLIP model.
+- Realistic_Projection module is used for projecting point clouds to 2D images.
+- The dataset is assumed to be organized in the specified structure under `dataset_path`.
+
+## Citation
+
+If you use this code in your research, please consider citing:
+
 ```
-
-## Command-line Arguments
-
-The script `train.py` supports several command-line arguments to customize the training process. The available arguments are as follows:
-
-- `--batchSize`: The batch size for training (default: 32).
-- `--num_points`: The number of points in each input point cloud (default: 1024).
-- `--workers`: The number of data loading workers (default: 4).
-- `--nepoch`: The number of epochs to train for (default: 250).
-- `--outf`: The output folder to save the training results (default: 'cls').
-- `--model`: Path to load a pre-trained model (default: '').
-- `--feature_transform`: Use feature transform (default: False).
-
-## Results
-
-The trained models will be saved in the specified output folder (`outf`) with the name `cls_model_<epoch>.pth`, where `<epoch>` represents the epoch number.
-
-After training, the final accuracy on the test set will be displayed.
+@article{YourArticleCitation,
+  title={Title of Your Article},
+  author={Author Names},
+  journal={Journal Name},
+  year={Year},
+  volume={Volume},
+  number={Number},
+  pages={Page Range},
+  doi={DOI},
+}
+```
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+```
 
-## Acknowledgments
-
-- The PointNet model is based on the implementation from [PointNet PyTorch](https://github.com/fxia22/pointnet.pytorch).
-- The CLIP model and preprocessing functions are from the [OpenCLIP](https://github.com/openai/CLIP) library.
-- The Realistic Projection object is provided by `Realistic_Projection` in `utils.mv_utils_zs` module.
-
-## Contact
-
-For any questions or inquiries, please contact [author@example.com](mailto:author@example.com).
+Please replace `yourusername` in the repository URL with your actual GitHub username and adjust any paths or details according to your use case.
