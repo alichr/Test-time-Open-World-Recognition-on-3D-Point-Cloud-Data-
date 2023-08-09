@@ -20,6 +20,7 @@ vec = import_numpy_array("Distance.npy")
 # plot and show the array
 import matplotlib.pyplot as plt
 plt.plot(vec)
+plt.xlabel('sample')
+plt.ylabel('Distance')
 plt.show()
-
 
