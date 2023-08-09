@@ -59,6 +59,26 @@ def projection():
     return proj
 
 
+## Define subsapce mathcing function using subspace memory with the following formulation: distance = feature - (feature * subspace.T) * subspace
+def subspace_matching(features, Subsapce):
+    """
+    Match features to a subspace memory.
+
+    Args:
+    - features: The features to match.
+    - Subsapce: The subspace memory.
+
+    Returns:
+    - distance: The distance between the features and the subspace memory.
+    """
+    distance = torch.zeros((features.shape[0], len(Subsapce.keys())), device=device)
+    for i, key in enumerate(Subsapce.keys()):
+        distance[:,i] = torch.norm(features - torch.matmul(torch.matmul(features, torch.from_numpy(Subsapce[key]).to(device).float().transpose(0,1)), torch.from_numpy(Subsapce[key]).to(device).float()), dim=1)
+    return distance
+
+
+
+
 # define the main function
 def main(opt):
     # deine data loader
@@ -126,6 +146,16 @@ def main(opt):
 
         # Concatenate 2D and 3D features
         features = torch.cat((features_2D, features_3D), dim=1)
+        
+        # print subsapce shape
+        print(Subsapce['subspace1'].shape)
+        stop
+        # subsapce matching
+        distance = subspace_matching(features, Subsapce)
+
+        print(distance)
+
+        stop
 
         # Classify
         pred = classifier(features)

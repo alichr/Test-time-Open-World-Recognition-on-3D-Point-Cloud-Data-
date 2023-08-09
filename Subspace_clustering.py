@@ -83,6 +83,9 @@ def SVD_numpy(X, n_components=3):
     - V: Right singular vectors of X.
     """
     U, S, V = np.linalg.svd(X, full_matrices=False)
+    # calculate the 95% energy of S and get the number of components
+    energy = np.cumsum(S)/np.sum(S)
+    n_components = np.where(energy>0.95)[0][0]
     return U[:, :n_components], S, V
 
 # Define SVD for creating a subspace using PyTorch
@@ -177,6 +180,8 @@ def main(opt):
         idx = np.where(kmeans.labels_ == i)[0]  # Use [0] to access the indices array from tuple
         cluster_feature_vectors = feature_vectors[idx]
         print(cluster_feature_vectors.shape)
+        # transpose cluster_feature_vectors
+        cluster_feature_vectors = cluster_feature_vectors.transpose()
         U, S, V = SVD_numpy(cluster_feature_vectors, n_components=3)
         np.save('subspace/subspace' + str(i) + '.npy', U)
         print(i)
