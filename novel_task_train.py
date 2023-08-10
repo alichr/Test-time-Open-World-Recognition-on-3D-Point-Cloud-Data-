@@ -14,6 +14,16 @@ import os
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+# define cenert of kmeans memory
+def kmeans_cenerts():
+    """
+    Create and return a kmeans cenerts memory.
+    """
+    kmeans_cenerts = np.load("kmeans_centroids.npy")
+    return kmeans_cenerts
+
+
+
 # define subspace memory
 def subsapce():
     """
@@ -98,13 +108,19 @@ def distance_to_subspace(features, Subspace):
     return distance
 
 # claculate distance with the center of the kmaeans cluster
-def distance_to_center(features,):
+def distance_to_center(features,kmeans_cenerts):
+    kmeans_cenerts = torch.tensor(kmeans_cenerts, dtype=torch.float32, device=device)
+    distance = torch.zeros((features.shape[0], len(kmeans_cenerts)), device=device)
+    for i in range(features.shape[0]):
+        for j in range(len(kmeans_cenerts)):
+            distance[i,j] = torch.norm(features[i,:]-kmeans_cenerts[j,:])
+    return distance
 
 
 
 # define the main function
 def main(opt):
-    Distance = torch.zeros(1971)
+    Distance = np.zeros(1971)
     # deine data loader
     dataloader = DatasetGen(opt, root=Path(opt.dataset_path), fewshot=argument.fewshot)
     t = 1
@@ -126,6 +142,10 @@ def main(opt):
 
     # Step 3: Load subspace memory
     Subsapce = subsapce()
+ 
+
+    # Step 4: Load kmeans_cenerts
+    Kmeans_cenerts = kmeans_cenerts()
 
     
 
@@ -177,9 +197,12 @@ def main(opt):
         print(Subsapce['subspace0'].shape)
         # subsapce matching
        # find_distance_to_subspace
-        distance = subspace_matching(features, Subsapce)
+       #distance = subspace_matching(features, Subsapce)
 
-        Distance[j] = torch.mean(distance)
+        # find_distance_to_center
+        distance = distance_to_center(features, Kmeans_cenerts)
+
+        Distance[j] = torch.sum(distance).cpu().detach().numpy()/10
 
         print('sample_' + str(j) + ':' , Distance[j])
 
@@ -197,7 +220,7 @@ def main(opt):
     f.write("final accuracy: %f" % (total_correct / float(total_testset)))
     f.close()
     # convert Distance array to numpy and save as npy file
-    Distance = Distance.cpu().detach().numpy()
+   
     np.save('Distance.npy', Distance)
 
     # plot the Distance array
