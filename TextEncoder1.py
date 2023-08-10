@@ -1,12 +1,11 @@
 import open_clip
 import torch
-import clip
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-model, preprocess = clip.load('ViT-B/32', device)
+model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
 # read text file
-f = open("storage.googleapis.com_bit_models_imagenet21k_wordnet_ids.txt", "r")
-f1 = open("storage.googleapis.com_bit_models_imagenet21k_wordnet_lemmas.txt", "r")
+f = open('storage.googleapis.com_bit_models_imagenet21k_wordnet_ids.txt', 'r')
+f1 = open('storage.googleapis.com_bit_models_imagenet21k_wordnet_lemmas.txt', 'r')
 
 Labelfile = f.read()
 Namefile = f1.read()
@@ -16,19 +15,18 @@ LableTemp=[]
 NameTemp=[]
 
 
-for i in range(100):#21843
+for i in range(21843):#21843
     print(i)
     xx = Labelfile.split("\n", i+1)
     LableTemp.append(xx[i])
-    print(LableTemp[i])  
     
     yy = Namefile.split("\n", i+1)
     NameTemp.append(yy[i])
-    print(NameTemp[i]) 
     
 Save_Mean_text_feature=[]
 
-for i in range(5):#21843
+for i in range(21843):#21843
+    print(i)
     temp = NameTemp[i].split(",", 1)
     count = 1
     L = len(temp)
@@ -61,5 +59,4 @@ for i in range(5):#21843
 
 temp = Save_Mean_text_feature[2]
   
-print(temp)
-print(temp.Label)
+print(len(Save_Mean_text_feature))
