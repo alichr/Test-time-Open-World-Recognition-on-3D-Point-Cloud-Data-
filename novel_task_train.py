@@ -97,6 +97,8 @@ def distance_to_subspace(features, Subspace):
 
     return distance
 
+# claculate distance with the center of the kmaeans cluster
+def distance_to_center(features,):
 
 
 
