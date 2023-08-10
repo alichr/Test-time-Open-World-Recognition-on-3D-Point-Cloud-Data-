@@ -174,6 +174,9 @@ def main(opt):
     # Step 5: Cluster samples
     kmeans = clustering(feature_vectors, n_clusters=10)
 
+    # save the kmeans centroids
+    np.save('kmeans_centroids.npy', kmeans.cluster_centers_)
+
 
     # Step6: seperate the clusters into different groups and apply SVD to each group and save each subsapce in a subsapce folder
     for i in range(kmeans.n_clusters):
