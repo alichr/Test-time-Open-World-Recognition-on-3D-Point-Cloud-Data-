@@ -60,7 +60,6 @@ def projection():
 
 
 ## Define subsapce mathcing function using subspace memory with the following formulation: distance = norm(feature - (feature * subspace.T) * subspace)
-import torch
 
 def subspace_matching(features, Subspace):
     """
@@ -76,13 +75,27 @@ def subspace_matching(features, Subspace):
     """
     distance = torch.zeros((features.shape[0], len(Subspace.keys())), device=device)
     for i, key in enumerate(Subspace.keys()):
-        subspace_matrix = torch.from_numpy(Subspace[key]).to(device).float()
-        distance[:, i] = torch.norm(features - torch.matmul(torch.matmul(features, subspace_matrix), subspace_matrix.transpose(0, 1)), dim=1)
+        subspace_basis = torch.tensor(Subspace[key], dtype=torch.float32, device=device)
+        
+        projection = torch.matmul(features, subspace_basis)
+        distance[:, i] = torch.norm(features - torch.matmul(projection, subspace_basis.t()), dim=1)
+    
     return distance
 
+def distance_to_subspace(features, Subspace):
+    def projection(P, V):
+        return torch.dot(P, V) / torch.dot(V, V) * V
 
+    def distance(P, P_prime):
+        return torch.norm(P - P_prime)
+    
+    distance = torch.zeros((features.shape[0], len(Subspace.keys())), device=device)
+    for i, key in enumerate(Subspace.keys()):
+        subspace_basis = torch.tensor(Subspace[key], dtype=torch.float32, device=device)
+        projection = torch.matmul(features, subspace_basis)
+        distance[:, i] = torch.norm(features - torch.matmul(projection, subspace_basis.t()), dim=1)
 
-
+    return distance
 
 
 
@@ -111,6 +124,8 @@ def main(opt):
 
     # Step 3: Load subspace memory
     Subsapce = subsapce()
+
+    
 
     # step4: define the classifer
         # Define the classifier architecture
@@ -159,9 +174,10 @@ def main(opt):
         # print subsapce shape
         print(Subsapce['subspace0'].shape)
         # subsapce matching
+       # find_distance_to_subspace
         distance = subspace_matching(features, Subsapce)
 
-        Distance[j] = torch.max(distance)
+        Distance[j] = torch.mean(distance)
 
         print('sample_' + str(j) + ':' , Distance[j])
 
