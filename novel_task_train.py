@@ -14,6 +14,26 @@ import os
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+
+
+# novel class in the 1000 imagenet classes
+novel_class = [26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36]
+novel_class_dic = {
+    26: ["n03337140", "n03742115", "n04550184"],
+    27: ["n02791124", "n03376595", "n04099969"],
+    28: ["n03179701"],
+    29: ["n03782006"],
+    30: ["n04239074"],
+    31: ["n03961711"],
+    32: ["n03201208", "n03982430"],
+    33: ["n04344873"],
+    34: ["0"],
+    35: ["n04344873"],
+    36: ["n04447861"]
+}
+
+text_data = np.load("Save_Mean_text_feature_image1000.npy",allow_pickle=True)
+
 # define cenert of kmeans memory
 def kmeans_cenerts():
     """
@@ -68,29 +88,60 @@ def projection():
     proj = Realistic_Projection()
     return proj
 
+# define a function for mathcing feature_2D (512) to Matrix with size (512 * 1000) colomn-wise with cosine similarity
+def cosine_similarity(feature_2D, Matrix):
+    
+    distance = torch.zeros((feature_2D.shape[0], len(Matrix)), device=device)
+    for i in range(len(Matrix)):
+        distance[:, i] = F.cosine_similarity(feature_2D, Matrix[i]['text_features'], dim=1)
+    # max distance index
+    index = torch.argmax(distance, dim=1)
+
+    class_pred = (Matrix[index]['Label'])
+
+
+    return class_pred
+
+
+# Function to find the key that matches the prediction
+def find_matching_key(prediction, category_dict):
+    for key, categories in category_dict.items():
+        if prediction in categories:
+            return key
+    return None
+
+
+
+
+
+
+
+
+
+
 
 ## Define subsapce mathcing function using subspace memory with the following formulation: distance = norm(feature - (feature * subspace.T) * subspace)
 
-def subspace_matching(features, Subspace):
-    """
-    Match features to a subspace memory.
+# def subspace_matching(features, Subspace):
+#     """
+#     Match features to a subspace memory.
 
-    Args:
-    - features: The features to match.
-    - Subspace: The subspace memory.
-    - device: The device to use (e.g., 'cuda' or 'cpu').
+#     Args:
+#     - features: The features to match.
+#     - Subspace: The subspace memory.
+#     - device: The device to use (e.g., 'cuda' or 'cpu').
 
-    Returns:
-    - distance: The distance between the features and the subspace memory.
-    """
-    distance = torch.zeros((features.shape[0], len(Subspace.keys())), device=device)
-    for i, key in enumerate(Subspace.keys()):
-        subspace_basis = torch.tensor(Subspace[key], dtype=torch.float32, device=device)
+#     Returns:
+#     - distance: The distance between the features and the subspace memory.
+#     """
+#     distance = torch.zeros((features.shape[0], len(Subspace.keys())), device=device)
+#     for i, key in enumerate(Subspace.keys()):
+#         subspace_basis = torch.tensor(Subspace[key], dtype=torch.float32, device=device)
         
-        projection = torch.matmul(features, subspace_basis)
-        distance[:, i] = torch.norm(features - torch.matmul(projection, subspace_basis.t()), dim=1)
+#         projection = torch.matmul(features, subspace_basis)
+#         distance[:, i] = torch.norm(features - torch.matmul(projection, subspace_basis.t()), dim=1)
     
-    return distance
+#     return distance
 
 def distance_to_subspace(features, Subspace):
     def projection(P, V):
@@ -109,6 +160,7 @@ def distance_to_subspace(features, Subspace):
 
 # claculate distance with the center of the kmaeans cluster
 def distance_to_center(features,kmeans_cenerts):
+
     kmeans_cenerts = torch.tensor(kmeans_cenerts, dtype=torch.float32, device=device)
     distance = torch.zeros((features.shape[0], len(kmeans_cenerts)), device=device)
     for i in range(features.shape[0]):
@@ -120,7 +172,8 @@ def distance_to_center(features,kmeans_cenerts):
 
 # define the main function
 def main(opt):
-    Distance = np.zeros(1971)
+    Distance_base_samples = np.zeros(1496)
+    Distance_novel_samples = np.zeros(475)
     # deine data loader
     dataloader = DatasetGen(opt, root=Path(opt.dataset_path), fewshot=argument.fewshot)
     t = 1
@@ -166,6 +219,8 @@ def main(opt):
 
     total_correct = 0
     total_testset = 0
+    b = 0
+    n = 0
     for j, data in tqdm(enumerate(testloader, 0)):
         points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
         points, target = points.to(device), target.to(device)
@@ -192,41 +247,69 @@ def main(opt):
 
         # Concatenate 2D and 3D features
         features = torch.cat((features_2D, features_3D), dim=1)
-        
-        # print subsapce shape
-        print(Subsapce['subspace0'].shape)
-        # subsapce matching
-       # find_distance_to_subspace
-       #distance = subspace_matching(features, Subsapce)
 
-        # find_distance_to_center
-        distance = distance_to_center(features, Kmeans_cenerts)
-
-        Distance[j] = torch.sum(distance).cpu().detach().numpy()/10
-
-        print('sample_' + str(j) + ':' , Distance[j])
-
-
-        # Classify
-        pred = classifier(features)
-        pred_choice = pred.data.max(1)[1]
-        correct = pred_choice.eq(target.data).cpu().sum()
-        total_correct += correct.item()
-        total_testset += points.size()[0]
+        # out-of-distribution detection
+        Dis = np.min(distance_to_center(features, Kmeans_cenerts).detach().numpy())
+        if Dis > 3.5: # out-of-distribution
+            print("out-of-distribution sample")
+            predic_class = cosine_similarity(features_2D, text_data)
+            pred = find_matching_key(predic_class, novel_class_dic)
+        else: # use the classfier for in-distribution
+            print("in-distribution sample")
+            pred = classifier(features)
+            pred_choice = pred.data.max(1)[1]
+            correct = pred_choice.eq(target.data).cpu().sum()
+            total_correct += correct.item()
+            total_testset += points.size()[0]
 
     print("final accuracy:", total_correct / float(total_testset))
+    print("total correct:", total_correct)
      # save results and paramerts of model in a log file
-    f = open("log.txt", "a")
-    f.write("final accuracy: %f" % (total_correct / float(total_testset)))
-    f.close()
-    # convert Distance array to numpy and save as npy file
-   
-    np.save('Distance.npy', Distance)
+    # f = open("log.txt", "a")
+    # f.write("final accuracy: %f" % (total_correct / float(total_testset)))
+    # f.close()
 
-    # plot the Distance array
-    plt.plot(Distance)
-    plt.xlabel('sample')
-    plt.ylabel('Distance')
+
+
+
+            
+
+        
+        # if target < 26:
+        #     # Calculate the distance to the subspace
+        #     Distance_base_samples[b] = np.min(distance_to_center(features, Kmeans_cenerts).detach().numpy())
+        #     print('base',Distance_base_samples[b],target)
+        #     b += 1
+        # else:
+        #     # Calculate the distance to the subspace
+        #     Distance_novel_samples[n] = np.min(distance_to_center(features, Kmeans_cenerts).detach().numpy())
+        #     print('novel',Distance_novel_samples[n],target)
+        #     n += 1
+
+        
+        
+    
+
+    # print("final accuracy:", total_correct / float(total_testset))
+    #  # save results and paramerts of model in a log file
+    # f = open("log.txt", "a")
+    # f.write("final accuracy: %f" % (total_correct / float(total_testset)))
+    # f.close()
+    # # convert Distance array to numpy and save as npy file
+   
+    # np.save('Distance.npy', Distance)
+
+   # plot Distance_base_samples and Distance_novel_samples in a sample figure with 2 subplots and different colors
+    plt.figure()
+    plt.subplot(2,1,1)
+    plt.plot(Distance_base_samples, 'r')
+    plt.ylabel('Distance to subspace')
+    plt.xlabel('Base samples')
+    plt.subplot(2,1,2)
+    plt.plot(Distance_novel_samples, 'b')
+    plt.ylabel('Distance to subspace')
+    plt.xlabel('Novel samples')
+    plt.savefig('Distance.png')
     plt.show()
 
 
