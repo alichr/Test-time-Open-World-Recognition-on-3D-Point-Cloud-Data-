@@ -61,11 +61,14 @@ import open_clip
 model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
 tokenizer = open_clip.get_tokenizer('ViT-B-32')
 
-image = preprocess(Image.open("dog_4.png")).unsqueeze(0)
-text = tokenizer(["a car", "a dog", "a cat", "a german shepherd dog", "a bloodhound dog"])
-
+image = preprocess(Image.open("3D-to-2D-proj/guitar/test9.png")).unsqueeze(0)
+text = tokenizer(["an image of a car", "an image of a guitar", "an image of a human"])
+image_features = 0
 with torch.no_grad(), torch.cuda.amp.autocast():
-    image_features = model.encode_image(image)
+    for k in range(10):
+        print(k)
+        image_features =+ model.encode_image(preprocess(Image.open("3D-to-2D-proj/guitar/test" + str(k) + ".png")).unsqueeze(0))/10
+    
     text_features = model.encode_text(text)
     image_features /= image_features.norm(dim=-1, keepdim=True)
     text_features /= text_features.norm(dim=-1, keepdim=True)
