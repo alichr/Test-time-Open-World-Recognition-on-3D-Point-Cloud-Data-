@@ -17,3 +17,8 @@ A depth map of a bowl visually represents varying distances from the observer's 
 To succinctly depict a depth map of a bowl, one can illustrate the bowl's recessed form with gradations of distance from the viewer.
 A monochromatic depth chart of a slanted [bowl] in grayscale.
 The depth map's subtle shading added an obscure dimension to the image of a bowl, enhancing its visual appeal.
+
+A depth map of a car provides a visual representation of its contours and distances, depicting the car's shape and spatial arrangement.
+To concisely convey a depth map of a car, one can portray the vehicle's 3D structure using varying shades to indicate depth and perspective.
+A monochromatic depth chart of an angled automobile in grayscale.
+The depth map added an obscure layer of complexity to the image of a car, revealing subtle details that might otherwise go unnoticed.
