@@ -89,18 +89,11 @@ def projection():
     return proj
 
 # define a function for mathcing feature_2D (512) to Matrix with size (512 * 1000) colomn-wise with cosine similarity
-def cosine_similarity(feature_2D, Matrix):
-    
-    distance = torch.zeros((feature_2D.shape[0], len(Matrix)), device=device)
-    for i in range(len(Matrix)):
-        distance[:, i] = F.cosine_similarity(feature_2D, Matrix[i]['text_features'], dim=1)
-    # max distance index
-    index = torch.argmax(distance, dim=1)
-
-    class_pred = (Matrix[index]['Label'])
-
-
-    return class_pred
+def clip_similarity(image_features, text_features):
+    image_features /= image_features.norm(dim=-1, keepdim=True)
+    text_features /= text_features.norm(dim=-1, keepdim=True)
+    text_probs = (100.0 * image_features @ text_features.T).softmax(dim=-1)
+    return text_probs
 
 
 # Function to find the key that matches the prediction
@@ -112,8 +105,24 @@ def find_matching_key(prediction, category_dict):
 
 
 
+# read a txt file line by line and save it in a list, and remove the empty lines
+def read_txt_file(file):
+    """
+    Read a txt file line by line and save it in a list, and remove the empty lines.
 
+    Args:
+    - file: The file to read.
 
+    Returns:
+    - array: The list of lines in the file.
+    """
+    with open(file, 'r') as f:
+        array = f.readlines()
+    array = [x.strip() for x in array]
+    array = list(filter(None, array))
+    return array
+
+  
 
 
 
@@ -121,27 +130,6 @@ def find_matching_key(prediction, category_dict):
 
 
 ## Define subsapce mathcing function using subspace memory with the following formulation: distance = norm(feature - (feature * subspace.T) * subspace)
-
-# def subspace_matching(features, Subspace):
-#     """
-#     Match features to a subspace memory.
-
-#     Args:
-#     - features: The features to match.
-#     - Subspace: The subspace memory.
-#     - device: The device to use (e.g., 'cuda' or 'cpu').
-
-#     Returns:
-#     - distance: The distance between the features and the subspace memory.
-#     """
-#     distance = torch.zeros((features.shape[0], len(Subspace.keys())), device=device)
-#     for i, key in enumerate(Subspace.keys()):
-#         subspace_basis = torch.tensor(Subspace[key], dtype=torch.float32, device=device)
-        
-#         projection = torch.matmul(features, subspace_basis)
-#         distance[:, i] = torch.norm(features - torch.matmul(projection, subspace_basis.t()), dim=1)
-    
-#     return distance
 
 def distance_to_subspace(features, Subspace):
     def projection(P, V):
@@ -217,6 +205,24 @@ def main(opt):
     # Load the classifier weights
     classifier.load_state_dict(torch.load('cls/cls_model_249.pth', map_location=torch.device('cpu')))
 
+
+    # load the text features
+    prompts = read_txt_file("chatgpt_description.txt")
+    text_features_tmp = torch.zeros((len(prompts), 512), device=device)
+    text = 0
+    for prompt in prompts:
+        text = open_clip.tokenize([prompt])
+        with torch.no_grad(), torch.cuda.amp.autocast():
+            text_features_tmp[prompts.index(prompt)] = feature_ext_2D.encode_text(text)
+        
+    text_features = torch.zeros((int(len(prompts)/4), 512), device=device)
+    for i in range(37):
+        text_features[i,:] = torch.mean(text_features_tmp[4*i:4*i+4,:], dim=0)
+
+
+    # score prediction
+    novel_class_correct = 0
+    novel_class_total = 475
     total_correct = 0
     total_testset = 0
     b = 0
@@ -249,11 +255,16 @@ def main(opt):
         features = torch.cat((features_2D, features_3D), dim=1)
 
         # out-of-distribution detection
+        print('novel_class_correct', novel_class_correct)
         Dis = np.min(distance_to_center(features, Kmeans_cenerts).detach().numpy())
         if Dis > 3.5: # out-of-distribution
             print("out-of-distribution sample")
-            predic_class = cosine_similarity(features_2D, text_data)
-            pred = find_matching_key(predic_class, novel_class_dic)
+            pred = clip_similarity(features_2D, text_features[26:])
+            pred_choice = pred.data.max(1)[1] + 26
+            if pred_choice == target:
+                novel_class_correct = novel_class_correct + 1
+            
+           
         else: # use the classfier for in-distribution
             print("in-distribution sample")
             pred = classifier(features)
@@ -261,9 +272,17 @@ def main(opt):
             correct = pred_choice.eq(target.data).cpu().sum()
             total_correct += correct.item()
             total_testset += points.size()[0]
-
+    # accuarcy for in-distribution
+    print("accuarcy for in-distribution")
     print("final accuracy:", total_correct / float(total_testset))
     print("total correct:", total_correct)
+    print('--------------------------------------')
+
+    # accuarcy for out-of-distribution
+    print("accuarcy for out-of-distribution")
+    print("final accuracy:", novel_class_correct / float(novel_class_total))
+
+
      # save results and paramerts of model in a log file
     # f = open("log.txt", "a")
     # f.write("final accuracy: %f" % (total_correct / float(total_testset)))
