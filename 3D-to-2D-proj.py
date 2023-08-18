@@ -63,7 +63,7 @@ def main(opt):
             with torch.no_grad():
                 for j in range(points.shape[0]):
                     print(target[j])
-                    if target[j] == 10:
+                    if target[j] == 24:
                         # Project samples to an image
                         pc_prj = proj.get_img(points[j,:,:].unsqueeze(0))
                         pc_img = torch.nn.functional.interpolate(pc_prj, size=(224, 224), mode='bilinear', align_corners=True)
@@ -75,7 +75,7 @@ def main(opt):
                             img = Image.fromarray(img)
                             # save each image based on k
 
-                            img.save('3D-to-2D-proj/test' + str(k) + '.png')
+                            img.save('3D-to-2D-proj/vase/test' + str(k) + '.png')
                         stop
         
                         pc_img = pc_img.to(device)

@@ -1,0 +1,19 @@
+A depth map of an airplane is a grayscale image where darker areas represent closer points on the airplane's surface and lighter areas represent farther points, simulating the perception of depth.
+A depth map of an airplane generates a visual representation where varying shades of gray convey the relative distances of different points on the airplane's surface from an observer's viewpoint.
+A monochromatic depth chart of an angled aircraft.
+The depth map of an airplane revealed intricate details that were otherwise obscure to the naked eye.
+
+The depth map of the bathtub reveals varying distances from its surface to create a three-dimensional representation.
+To concisely depict a depth map of a bathtub, capture the varying distances from the surface to convey its three-dimensional structure.
+A monochromatic depth chart of a slanted tub.
+The obscure nature of the depth map made it challenging to discern the exact shape of the bathtub.
+
+The depth map of the bottle illustrates varying depths and distances, providing a three-dimensional visualization.
+To succinctly portray a depth map of a bottle, represent the diverse depths and distances to create a three-dimensional visualization.
+A monochromatic depth chart of a tilted bottle.
+The depth map's details made the exact contours of the bottle somewhat obscure.
+
+A depth map of a bowl visually represents varying distances from the observer's viewpoint, highlighting the bowl's concave shape and the spatial distribution of its surface.
+To succinctly depict a depth map of a bowl, one can illustrate the bowl's recessed form with gradations of distance from the viewer.
+A monochromatic depth chart of a slanted [bowl] in grayscale.
+The depth map's subtle shading added an obscure dimension to the image of a bowl, enhancing its visual appeal.
