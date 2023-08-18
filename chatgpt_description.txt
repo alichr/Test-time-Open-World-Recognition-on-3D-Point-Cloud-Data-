@@ -22,3 +22,163 @@ A depth map of a car provides a visual representation of its contours and distan
 To concisely convey a depth map of a car, one can portray the vehicle's 3D structure using varying shades to indicate depth and perspective.
 A monochromatic depth chart of an angled automobile in grayscale.
 The depth map added an obscure layer of complexity to the image of a car, revealing subtle details that might otherwise go unnoticed.
+
+A depth map of a cone visually represents the varying distances from the viewer, highlighting the cone's tapering structure and the spatial arrangement of its surface.
+To succinctly explain a depth map of a cone, one can depict the cone's three-dimensional form using gradations of distance to emphasize its depth and shape.
+A monochromatic depth chart of an angled cone in grayscale.
+The depth map revealed intricate details that had previously remained obscure, providing a comprehensive view of the cone's dimensions and surface characteristics.
+
+A depth map of a cup visually represents the varying distances from the observer, highlighting the cup's concave shape and the spatial distribution of its surface.
+To concisely depict a depth map of a cup, one can use shading to illustrate the cup's three-dimensional structure and show the depth variations from the viewer's perspective.
+A monochromatic depth chart of a slanted cup in grayscale.
+The depth map added an obscure layer of detail to the image of a cup, revealing subtle intricacies that might otherwise go unnoticed.
+
+A depth map of a curtain visually represents the varying distances from the viewer, highlighting the curtain's folds and the spatial arrangement of its fabric.
+To concisely convey a depth map of a curtain, one can depict the curtain's layered appearance using gradations of distance to emphasize its depth and texture.
+A monochromatic depth chart of an angled drapery in grayscale.
+The depth map revealed subtle patterns that had been previously obscure within the folds of the curtain, offering a new perspective on its design.
+
+A depth map of a flower pot visually represents the varying distances from the viewer, highlighting the pot's cylindrical shape and the spatial distribution of its surface.
+To succinctly illustrate a depth map of a flower pot, one can use shading to showcase the pot's three-dimensional structure and emphasize the depth variations from the observer's viewpoint.
+A monochromatic depth chart of a slanted plant container in grayscale.
+The depth map added an obscure layer of complexity to the image of a flower pot, unveiling intricate surface details that might otherwise go unnoticed.
+
+A depth map of a glass box visually represents the varying distances from the viewer, highlighting the box's transparent surfaces and the spatial arrangement of its edges.
+To concisely portray a depth map of a glass box, one can use shading to depict the box's three-dimensional structure and emphasize the depth variations from the observer's perspective.
+A monochromatic depth chart of an angled transparent enclosure in grayscale.
+The depth map added an obscure layer of intrigue to the image of a glass box, revealing subtle internal dimensions that might remain unnoticed otherwise.
+
+A depth map of a guitar box visually represents the varying distances from the viewer, highlighting the box's shape and the spatial arrangement of its surfaces.
+To concisely depict a depth map of a guitar, one can use shading to showcase the guitar's three-dimensional structure and emphasize the depth variations from the observer's viewpoint.
+A monochromatic depth chart of an angled musical instrument in grayscale.
+The depth map revealed hidden intricacies within the contours of a guitar, adding an obscure layer of complexity to its visual representation.
+
+A depth map of a keyboard box visually represents the varying distances from the viewer, highlighting the box's shape and the spatial arrangement of its surfaces.
+To concisely illustrate a depth map of a keyboard, one can use shading to portray the keyboard's three-dimensional structure and emphasize the depth changes from the viewer's perspective.
+A monochromatic depth chart of an angled typing instrument in grayscale.
+The depth map added an obscure layer of intricacy to the image of a keyboard, revealing subtle variations in key heights and surface textures.
+
+A depth map of a lamp box visually represents the varying distances from the viewer, highlighting the box's shape and the spatial arrangement of its surfaces.
+To succinctly convey a depth map of a lamp, one can use shading to depict the lamp's three-dimensional structure and emphasize the depth variations from the observer's perspective.
+A monochromatic depth chart of an angled light fixture in grayscale.
+The depth map added an obscure layer of detail to the image of a lamp, revealing intricate patterns on its surface that might otherwise go unnoticed.
+
+A depth map of a laptop box visually represents the varying distances from the viewer, highlighting the box's shape and the spatial arrangement of its surfaces.
+To concisely depict a depth map of a laptop, one can use shading to showcase the laptop's three-dimensional structure and emphasize the depth variations from the observer's viewpoint.
+A monochromatic depth chart of an angled portable computer in grayscale.
+The depth map revealed intricate patterns within the laptop's design, adding an obscure layer of detail to its visual representation.
+
+A depth map of a mantel visually represents the varying distances from the viewer, highlighting the mantel's contours and the spatial arrangement of its surface.
+To succinctly portray a depth map of a mantel, one can use shading to illustrate the mantel's three-dimensional structure and emphasize the depth variations from the observer's perspective.
+A monochromatic depth chart of an angled fireplace shelf in grayscale.
+The depth map added an obscure layer of complexity to the image of a mantel, revealing subtle textures and dimensions that might otherwise go unnoticed.
+
+A depth map of a nightstand visually represents the varying distances from the viewer, highlighting the nightstand's structure and the spatial arrangement of its surfaces.
+To concisely depict a depth map of a nightstand, one can use shading to showcase the furniture's three-dimensional design and emphasize the depth changes from the observer's viewpoint.
+A monochromatic depth chart of an angled bedside table in grayscale.
+The depth map revealed intricate patterns and details on the surface of the nightstand, adding an obscure layer of depth to its visual representation.
+
+A depth map of a person visually represents the varying distances from the viewer, highlighting the person's form and the spatial arrangement of their body.
+To succinctly depict a depth map of a person, one can use shading to illustrate the person's three-dimensional figure and emphasize the depth variations from the observer's perspective.
+A monochromatic depth chart of an angled individual in grayscale.
+The depth map added an obscure layer of intricacy to the image of a person, revealing nuanced contours and dimensions that might otherwise go unnoticed.
+
+A depth map of a piano visually represents the varying distances from the viewer, highlighting the piano's structure and the spatial arrangement of its keys and components.
+To concisely portray a depth map of a piano, one can use shading to illustrate the piano's three-dimensional design and emphasize the depth changes from the observer's perspective.
+A monochromatic depth chart of an angled grand musical instrument in grayscale.
+The depth map added an obscure layer of complexity to the image of a piano, revealing intricate details on the piano's surface and within its mechanisms.
+
+A depth map of a plant visually represents the varying distances from the viewer, highlighting the plant's structure and the spatial arrangement of its leaves and stems.
+To succinctly depict a depth map of a plant, one can use shading to illustrate the plant's three-dimensional form and emphasize the depth variations from the observer's viewpoint.
+A monochromatic depth chart of an angled botanical specimen in grayscale.
+The depth map added an obscure layer of detail to the image of a plant, unveiling hidden textures and layers within its foliage.
+
+A depth map of a radio visually represents the varying distances from the viewer, highlighting the radio's structure and the spatial arrangement of its knobs and features.
+To concisely portray a depth map of a radio, one can use shading to illustrate the radio's three-dimensional design and emphasize the depth changes from the observer's perspective.
+A monochromatic depth chart of an angled wireless receiver in grayscale.
+The depth map added an obscure layer of complexity to the image of a radio, revealing nuanced contours and dimensions that might be overlooked.
+
+A depth map of a range hood visually represents the varying distances from the viewer, highlighting the hood's structure and the spatial arrangement of its surfaces.
+To succinctly illustrate a depth map of a range hood, one can use shading to showcase the hood's three-dimensional design and emphasize the depth variations from the observer's perspective.
+A monochromatic depth chart of an angled exhaust canopy in grayscale.
+The depth map added an obscure layer of detail to the image of a range hood, revealing hidden patterns and textures within its construction.
+
+A depth map of stairs visually represents the varying distances from the viewer, highlighting the stairs' structure and the spatial arrangement of its steps.
+To concisely depict a depth map of stairs, one can use shading to illustrate the staircase's three-dimensional layout and emphasize the depth variations from the observer's viewpoint.
+A monochromatic depth chart of an angled staircase in grayscale.
+The depth map added an obscure layer of detail to the image of stairs, revealing subtle variations in step heights and surface textures.
+
+A depth map of a tent visually represents the varying distances from the viewer, highlighting the tent's structure and the spatial arrangement of its fabric.
+To succinctly portray a depth map of a tent, one can use shading to illustrate the tent's three-dimensional design and emphasize the depth variations from the observer's perspective.
+A monochromatic depth chart of a slanted shelter in grayscale.
+The depth map added an obscure layer of complexity to the image of a tent, revealing hidden creases and folds in its material.
+
+A depth map of a TV stand visually represents the varying distances from the viewer, highlighting the stand's structure and the spatial arrangement of its shelves and surfaces.
+To concisely illustrate a depth map of a TV stand, one can use shading to showcase the stand's three-dimensional design and emphasize the depth variations from the observer's perspective.
+A monochromatic depth chart of an angled television console in grayscale.
+The depth map added an obscure layer of detail to the image of a TV stand, revealing subtle textures and dimensions in its construction.
+
+A depth map of a vase visually represents the varying distances from the viewer, highlighting the vase's shape and the spatial arrangement of its curves and contours.
+To succinctly depict a depth map of a vase, one can use shading to illustrate the vase's three-dimensional form and emphasize the depth variations from the observer's perspective.
+A monochromatic depth chart of a slanted flower container in grayscale.
+The depth map added an obscure layer of intricacy to the image of a vase, revealing hidden patterns and textures on its surface.
+
+A depth map of an Xbox visually represents the varying distances from the viewer, highlighting the Xbox's structure and the spatial arrangement of its components.
+To concisely portray a depth map of an Xbox, one can use shading to illustrate the console's three-dimensional design and emphasize the depth variations from the observer's viewpoint.
+A monochromatic depth chart of an angled gaming console in grayscale.
+The depth map added an obscure layer of complexity to the image of an Xbox, revealing subtle details within the console's design that might otherwise go unnoticed.
+
+A depth map of a cabinet visually represents the varying distances from the viewer, highlighting the cabinet's structure and the spatial arrangement of its shelves and surfaces.
+To succinctly depict a depth map of a cabinet, one can use shading to illustrate the cabinet's three-dimensional design and emphasize the depth variations from the observer's perspective.
+A monochromatic depth chart of an angled storage unit in grayscale.
+The depth map added an obscure layer of detail to the image of a cabinet, revealing hidden textures and patterns in its construction.
+
+A depth map of a chair visually represents the varying distances from the viewer, highlighting the chair's structure and the spatial arrangement of its seat and backrest.
+To concisely illustrate a depth map of a chair, one can use shading to showcase the chair's three-dimensional design and emphasize the depth variations from the observer's perspective.
+A monochromatic depth chart of an angled seating furniture in grayscale.
+The depth map added an obscure layer of detail to the image of a chair, unveiling hidden contours and dimensions that might be overlooked.
+
+A depth map of a desk visually represents the varying distances from the viewer, highlighting the desk's structure and the spatial arrangement of its surface and compartments.
+To succinctly depict a depth map of a desk, one can use shading to illustrate the desk's three-dimensional design and emphasize the depth variations from the observer's viewpoint.
+A monochromatic depth chart of an angled workstation in grayscale.
+The depth map added an obscure layer of complexity to the image of a desk, revealing hidden patterns and textures in its construction.
+
+A depth map of a display visually represents the varying distances from the viewer, highlighting the display's surface and the spatial arrangement of its pixels.
+To concisely illustrate a depth map of a display, one can use shading to showcase the display's three-dimensional layout and emphasize the depth variations from the observer's perspective.
+A monochromatic depth chart of an angled screen in grayscale.
+The depth map added an obscure layer of intricacy to the image of a display, revealing nuanced variations in pixel depth that might not be immediately noticeable.
+
+A depth map of a door visually represents the varying distances from the viewer, highlighting the door's structure and the spatial arrangement of its panels and edges.
+To succinctly depict a depth map of a door, one can use shading to illustrate the door's three-dimensional design and emphasize the depth variations from the observer's viewpoint.
+A monochromatic depth chart of an angled entranceway in grayscale.
+The depth map added an obscure layer of complexity to the image of a door, revealing subtle textures and dimensions that might go unnoticed upon casual observation.
+
+A depth map of a shelf visually represents the varying distances from the viewer, highlighting the shelf's structure and the spatial arrangement of its levels.
+To concisely portray a depth map of a shelf, one can use shading to illustrate the shelf's three-dimensional design and emphasize the depth variations from the observer's perspective.
+A monochromatic depth chart of an angled storage platform in grayscale.
+The depth map added an obscure layer of detail to the image of a shelf, revealing hidden textures and variations in its construction.
+
+A depth map of a table visually represents the varying distances from the viewer, highlighting the table's structure and the spatial arrangement of its surface and legs.
+To succinctly depict a depth map of a table, one can use shading to illustrate the table's three-dimensional design and emphasize the depth variations from the observer's viewpoint.
+A monochromatic depth chart of an angled furniture piece in grayscale.
+The depth map added an obscure layer of complexity to the image of a table, revealing hidden details in the texture and contour of the tabletop.
+
+A depth map of a bed visually represents the varying distances from the viewer, highlighting the bed's structure and the spatial arrangement of its mattress and frame.
+To concisely illustrate a depth map of a bed, one can use shading to showcase the bed's three-dimensional design and emphasize the depth variations from the observer's perspective.
+A monochromatic depth chart of an angled sleeping furniture in grayscale.
+The depth map added an obscure layer of intricacy to the image of a bed, revealing hidden patterns and textures in the fabric of the mattress.
+
+A depth map of a sink visually represents the varying distances from the viewer, highlighting the sink's structure and the spatial arrangement of its basin and faucets.
+To succinctly depict a depth map of a sink, one can use shading to illustrate the sink's three-dimensional design and emphasize the depth variations from the observer's viewpoint.
+A monochromatic depth chart of an angled washbasin in grayscale.
+The depth map added an obscure layer of complexity to the image of a sink, revealing subtle details and textures in the porcelain surface.
+
+A depth map of a sofa visually represents the varying distances from the viewer, highlighting the sofa's structure and the spatial arrangement of its cushions and upholstery.
+To concisely illustrate a depth map of a sofa, one can use shading to showcase the sofa's three-dimensional design and emphasize the depth variations from the observer's perspective.
+A monochromatic depth chart of an angled couch in grayscale.
+The depth map added an obscure layer of detail to the image of a sofa, revealing hidden patterns and textures within the fabric.
+
+A depth map of a toilet visually represents the varying distances from the viewer, highlighting the toilet's structure and the spatial arrangement of its bowl and seat.
+To succinctly depict a depth map of a toilet, one can use shading to illustrate the toilet's three-dimensional design and emphasize the depth variations from the observer's viewpoint.
+A monochromatic depth chart of an angled restroom fixture in grayscale.
+The depth map added an obscure layer of intricacy to the image of a toilet, revealing subtle details and contours in the porcelain surface that might not be immediately visible.
