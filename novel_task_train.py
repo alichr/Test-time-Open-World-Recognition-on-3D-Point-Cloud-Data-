@@ -207,18 +207,34 @@ def main(opt):
 
 
     # load the text features
-    prompts = read_txt_file("chatgpt_description.txt")
+    prompts = read_txt_file("class_name.txt")
     text_features_tmp = torch.zeros((len(prompts), 512), device=device)
     text = 0
     for prompt in prompts:
-        text = open_clip.tokenize([prompt])
+        text = open_clip.tokenize(["A depth map of" + prompt])
         with torch.no_grad(), torch.cuda.amp.autocast():
             text_features_tmp[prompts.index(prompt)] = feature_ext_2D.encode_text(text)
         
-    text_features = torch.zeros((int(len(prompts)/4), 512), device=device)
-    for i in range(37):
-        text_features[i,:] = torch.mean(text_features_tmp[4*i:4*i+4,:], dim=0)
-     #   text_features[i,:] = text_features_tmp[(4*i),:]
+    text_features = torch.zeros((int(len(prompts)), 512), device=device)
+    text_features = text_features_tmp
+ 
+
+    
+
+
+    # # load the text features
+    # prompts = read_txt_file("chatgpt_description.txt")
+    # text_features_tmp = torch.zeros((len(prompts), 512), device=device)
+    # text = 0
+    # for prompt in prompts:
+    #     text = open_clip.tokenize([prompt])
+    #     with torch.no_grad(), torch.cuda.amp.autocast():
+    #         text_features_tmp[prompts.index(prompt)] = feature_ext_2D.encode_text(text)
+        
+    # text_features = torch.zeros((int(len(prompts)/4), 512), device=device)
+    # for i in range(37):
+    #     text_features[i,:] = torch.mean(text_features_tmp[4*i:4*i+4,:], dim=0)
+    #  #   text_features[i,:] = text_features_tmp[(4*i),:]
 
 
     # score prediction
