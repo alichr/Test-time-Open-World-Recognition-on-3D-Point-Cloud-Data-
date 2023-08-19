@@ -218,6 +218,7 @@ def main(opt):
     text_features = torch.zeros((int(len(prompts)/4), 512), device=device)
     for i in range(37):
         text_features[i,:] = torch.mean(text_features_tmp[4*i:4*i+4,:], dim=0)
+     #   text_features[i,:] = text_features_tmp[(4*i),:]
 
 
     # score prediction
