@@ -125,10 +125,6 @@ def read_txt_file(file):
   
 
 
-
-
-
-
 ## Define subsapce mathcing function using subspace memory with the following formulation: distance = norm(feature - (feature * subspace.T) * subspace)
 
 def distance_to_subspace(features, Subspace):
@@ -207,34 +203,34 @@ def main(opt):
 
 
     # load the text features
-    prompts = read_txt_file("class_name.txt")
-    text_features_tmp = torch.zeros((len(prompts), 512), device=device)
-    text = 0
-    for prompt in prompts:
-        text = open_clip.tokenize(["A depth map of" + prompt])
-        with torch.no_grad(), torch.cuda.amp.autocast():
-            text_features_tmp[prompts.index(prompt)] = feature_ext_2D.encode_text(text)
+    # prompts = read_txt_file("class_name.txt")
+    # text_features_tmp = torch.zeros((len(prompts), 512), device=device)
+    # text = 0
+    # for prompt in prompts:
+    #     text = open_clip.tokenize(["A depth map of" + prompt])
+    #     with torch.no_grad(), torch.cuda.amp.autocast():
+    #         text_features_tmp[prompts.index(prompt)] = feature_ext_2D.encode_text(text)
         
-    text_features = torch.zeros((int(len(prompts)), 512), device=device)
-    text_features = text_features_tmp
+    # text_features = torch.zeros((int(len(prompts)), 512), device=device)
+    # text_features = text_features_tmp
  
 
     
 
 
     # # load the text features
-    # prompts = read_txt_file("chatgpt_description.txt")
-    # text_features_tmp = torch.zeros((len(prompts), 512), device=device)
-    # text = 0
-    # for prompt in prompts:
-    #     text = open_clip.tokenize([prompt])
-    #     with torch.no_grad(), torch.cuda.amp.autocast():
-    #         text_features_tmp[prompts.index(prompt)] = feature_ext_2D.encode_text(text)
+    prompts = read_txt_file("chatgpt_description.txt")
+    text_features_tmp = torch.zeros((len(prompts), 512), device=device)
+    text = 0
+    for prompt in prompts:
+        text = open_clip.tokenize([prompt])
+        with torch.no_grad(), torch.cuda.amp.autocast():
+            text_features_tmp[prompts.index(prompt)] = feature_ext_2D.encode_text(text)
         
-    # text_features = torch.zeros((int(len(prompts)/4), 512), device=device)
-    # for i in range(37):
-    #     text_features[i,:] = torch.mean(text_features_tmp[4*i:4*i+4,:], dim=0)
-    #  #   text_features[i,:] = text_features_tmp[(4*i),:]
+    text_features = torch.zeros((int(len(prompts)/4), 512), device=device)
+    for i in range(37):
+        text_features[i,:] = torch.mean(text_features_tmp[4*i:4*i+4,:], dim=0)
+     #   text_features[i,:] = text_features_tmp[(4*i),:]
 
 
     # score prediction
@@ -258,6 +254,7 @@ def main(opt):
                 pc_img = torch.nn.functional.interpolate(pc_prj, size=(224, 224), mode='bilinear', align_corners=True)
                 pc_img = pc_img.to(device)
                 # Forward samples to the CLIP model
+
                 pc_img = feature_ext_2D.encode_image(pc_img).to(device)
                 # Average the features
                 pc_img_avg = torch.mean(pc_img, dim=0)
@@ -298,6 +295,8 @@ def main(opt):
     # accuarcy for out-of-distribution
     print("accuarcy for out-of-distribution")
     print("final accuracy:", novel_class_correct / float(novel_class_total))
+
+
 
 
      # save results and paramerts of model in a log file
