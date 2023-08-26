@@ -255,6 +255,11 @@ def main(opt):
                 pc_img = pc_img.to(device)
                 # Forward samples to the CLIP model
 
+                print(torch.min(pc_img[3,:,:,:]))
+
+                
+
+
                 pc_img = feature_ext_2D.encode_image(pc_img).to(device)
                 # Average the features
                 pc_img_avg = torch.mean(pc_img, dim=0)
