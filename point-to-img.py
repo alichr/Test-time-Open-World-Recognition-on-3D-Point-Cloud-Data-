@@ -173,7 +173,7 @@ def main(opt):
             # save img
 
             kk += 1
-            if kk % 10 == 0:
+            if kk % 100 == 0:
                 img = point_to_img[0,:,:,:].squeeze(0).permute(1,2,0).detach().cpu().numpy()
                 img = (img - img.min()) / (img.max() - img.min())
                 img = (img * 255).astype(np.uint8)
