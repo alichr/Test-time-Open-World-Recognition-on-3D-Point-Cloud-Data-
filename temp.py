@@ -63,16 +63,17 @@ tokenizer = open_clip.get_tokenizer('ViT-B-32')
 
 image = preprocess(Image.open("3D-to-2D-proj/guitar/test9.png")).unsqueeze(0)
 text = tokenizer([
-    "A depth map of a car depicts the diverse distances between the car's distinct features and the chosen perspective, contributing to a heightened sense of three-dimensionality within digital environments.",
-    "A depth map of a guitar illustrates the varying distances of the guitar's surfaces and components from a designated viewpoint, serving to enhance its three-dimensional appearance in digital contexts.",
+    "An image of a bottle.",
+    "An image of a car.",
+    "An image of a guitar.",
     "A depth map of a person represents the varying distances of different points on their body from a specific viewpoint, crucial for creating 3D realism in computer graphics and computer vision applications.", 
     "A depth map of a flower pot portrays a visual guide depicting the varying spatial gaps between the utilitarian structure, functional features, and practical design of the pot's construction and the viewer's designated angle, facilitating the generation of enhanced three-dimensional renderings.",
-    "A depth map of a vase presents a visual representation showcasing the diverse spatial distances between the intricate curves, delicate contours, and refined details of the vase's silhouette and the observer's chosen standpoint, contributing to the creation of immersive three-dimensional visualizations."])
+    "A depth map of a vase presents a visual representation showcasing the diverse spatial distances between the intricate curves, delicate contours, and refined details of the vase's silhouette and the observer's chosen standpoint, contributing to the creation of immersive three-dimensional visualizations.", "an image of an airplane"])
 image_features = 0
 with torch.no_grad(), torch.cuda.amp.autocast():
     for k in range(10):
         print(k)
-        image_features = image_features + model.encode_image(preprocess(Image.open("3D-to-2D-proj/flowerpot/test" + str(k) + ".png")).unsqueeze(0))
+        image_features = image_features + model.encode_image(preprocess(Image.open("3D-to-2D-proj/bottle/bottle_384.png")).unsqueeze(0))
     
     text_features = model.encode_text(text)
     image_features /= image_features.norm(dim=-1, keepdim=True)

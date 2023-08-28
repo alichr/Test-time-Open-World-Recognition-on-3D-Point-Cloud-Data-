@@ -23,17 +23,22 @@ def set_random_seed(seed):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-# define a projection module point cloud to image
+# define a projection module point cloud to image with 5 hidden layers (batch, 1024) to (batch, 3, 224, 224)
+
 class Projection(torch.nn.Module):
     def __init__(self):
         super(Projection, self).__init__()
         self.fc1 = torch.nn.Linear(1024, 512)
-        self.fc2 = torch.nn.Linear(512, 3*224*224)
+        self.fc2 = torch.nn.Linear(512, 2048)
+        self.fc3 = torch.nn.Linear(2048, 8192)
+        self.fc4 = torch.nn.Linear(8192, 3*224*224)
         self.relu = torch.nn.ReLU()
         self.sigmoid = torch.nn.Sigmoid()
         self.dropout = torch.nn.Dropout(p=0.5)
         self.bn1 = torch.nn.BatchNorm1d(512)
-        self.bn2 = torch.nn.BatchNorm1d(3*224*224)
+        self.bn2 = torch.nn.BatchNorm1d(2048)
+        self.bn3 = torch.nn.BatchNorm1d(8192)
+        self.bn4 = torch.nn.BatchNorm1d(3*224*224)
 
     def forward(self, x):
         x = self.fc1(x)
@@ -42,6 +47,14 @@ class Projection(torch.nn.Module):
         x = self.dropout(x)
         x = self.fc2(x)
         x = self.bn2(x)
+        x = self.relu(x)
+        x = self.dropout(x)
+        x = self.fc3(x)
+        x = self.bn3(x)
+        x = self.relu(x)
+        x = self.dropout(x)
+        x = self.fc4(x)
+        x = self.bn4(x)
         x = self.sigmoid(x)
         x = x.view(-1, 3, 224, 224)
         return x
@@ -153,6 +166,10 @@ def main(opt):
 
             # point cloud to image
             point_to_img = proj(point_embedding)
+            
+
+            # convert point_to_image (1,224,224) to (3,224,224)
+
 
             # save image
 
