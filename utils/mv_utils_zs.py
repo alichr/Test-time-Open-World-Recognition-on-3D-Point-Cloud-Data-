@@ -224,4 +224,78 @@ def get3DGaussianKernel(ksize, depth, sigma=2, zsigma=2):
     kernel3d = np.repeat(kernel2d[None,:,:], depth, axis=0) * zkernel[:,None, None]
     kernel3d = kernel3d / torch.sum(kernel3d)
     return kernel3d
+
+
+class Realistic_Projection_Learnable:
+    """For creating images from PC based on the view information.
+    """
+    def __init__(self):
+        _views = np.asarray([
+            [[1 * np.pi / 4, 0, np.pi / 2], [-0.5, -0.5, TRANS]],
+            [[3 * np.pi / 4, 0, np.pi / 2], [-0.5, -0.5, TRANS]],
+            [[5 * np.pi / 4, 0, np.pi / 2], [-0.5, -0.5, TRANS]],
+            [[7 * np.pi / 4, 0, np.pi / 2], [-0.5, -0.5, TRANS]],
+            [[0 * np.pi / 2, 0, np.pi / 2], [-0.5, -0.5, TRANS]],
+            [[1 * np.pi / 2, 0, np.pi / 2], [-0.5, -0.5, TRANS]],
+            [[2 * np.pi / 2, 0, np.pi / 2], [-0.5, -0.5, TRANS]],
+            [[3 * np.pi / 2, 0, np.pi / 2], [-0.5, -0.5, TRANS]],
+            [[0, -np.pi / 2, np.pi / 2], [-0.5, -0.5, TRANS]],
+            [[0, np.pi / 2, np.pi / 2], [-0.5, -0.5, TRANS]],
+            ])
         
+        # adding some bias to the view angle to reveal more surface
+        _views_bias = np.asarray([
+            [[0, np.pi / 9, 0], [-0.5, 0, TRANS]],
+            [[0, np.pi / 9, 0], [-0.5, 0, TRANS]],
+            [[0, np.pi / 9, 0], [-0.5, 0, TRANS]],
+            [[0, np.pi / 9, 0], [-0.5, 0, TRANS]],
+            [[0, np.pi / 9, 0], [-0.5, 0, TRANS]],
+            [[0, np.pi / 9, 0], [-0.5, 0, TRANS]],
+            [[0, np.pi / 9, 0], [-0.5, 0, TRANS]],
+            [[0, np.pi / 9, 0], [-0.5, 0, TRANS]],
+            [[0, np.pi / 15, 0], [-0.5, 0, TRANS]],
+            [[0, np.pi / 15, 0], [-0.5, 0, TRANS]],
+            ])
+
+        self.num_views = _views.shape[0]
+
+        angle = torch.tensor(_views[:, 0, :]).float()
+        self.rot_mat = euler2mat(angle).transpose(1, 2)
+        angle2 = torch.tensor(_views_bias[:, 0, :]).float()
+        self.rot_mat2 = euler2mat(angle2).transpose(1, 2)
+
+        self.translation = torch.tensor(_views[:, 1, :]).float()
+        self.translation = self.translation.unsqueeze(1)
+
+        self.grid2image = Grid2Image()
+
+    def get_img(self, points):
+        b, _, _ = points.shape
+        v = self.translation.shape[0]
+
+        _points = self.point_transform(
+            points=torch.repeat_interleave(points, v, dim=0),
+            rot_mat=self.rot_mat.repeat(b, 1, 1),
+            rot_mat2=self.rot_mat2.repeat(b, 1, 1),
+            translation=self.translation.repeat(b, 1, 1))
+
+        grid = points2grid(points=_points, resolution=params['resolution'], depth=params['depth']).squeeze()
+        img = self.grid2image(grid)
+        return img
+
+    @staticmethod
+    def point_transform(points, rot_mat, rot_mat2, translation):
+        """
+        :param points: [batch, num_points, 3]
+        :param rot_mat: [batch, 3]
+        :param rot_mat2: [batch, 3]
+        :param translation: [batch, 1, 3]
+        :return:
+        """
+        rot_mat = rot_mat.to(points.device)
+        rot_mat2 = rot_mat2.to(points.device)
+        translation = translation.to(points.device)
+        points = torch.matmul(points, rot_mat)
+        points = torch.matmul(points, rot_mat2)
+        points = points - translation
+        return points
