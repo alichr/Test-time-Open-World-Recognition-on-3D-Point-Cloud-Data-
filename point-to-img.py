@@ -8,6 +8,7 @@ import open_clip
 from utils.mv_utils_zs import Realistic_Projection
 from model.PointNet import PointNetfeat, feature_transform_regularizer
 from utils.dataloader import *
+from utils.dataloader_miniImageNet import *
 from PIL import Image
 from torch import nn
 
@@ -122,7 +123,10 @@ def main(opt):
     trainloader = dataset[t]['train']
     testloader = dataset[t]['test'] 
 
-    
+    # define miniImageNet data loader
+    MiniImageNet_dataset = MiniImageNet(img_list='dataset/MiniImageNet/image_list.txt', img_dir='dataset/MiniImageNet/')
+    MiniImageNet_data = DataLoader(MiniImageNet_dataset, opt.batch_size, shuffle=True)
+
 
     # Load CLIP model and preprocessing function
     clip_model, clip_preprocess = load_clip_model()
@@ -134,8 +138,6 @@ def main(opt):
     
     # define projection module point cloud to image
     proj = Projection().to(device)
-
-
 
   
     # Define optimizer for PointNet and classifier
@@ -166,24 +168,22 @@ def main(opt):
 
             # point cloud to image
             point_to_img = proj(point_embedding)
-            
-
-            # convert point_to_image (1,224,224) to (3,224,224)
-
-
-            # save image
-
-   
 
 
             # extract img feature from clip
             image_embeddings = clip_model.encode_image(point_to_img).to(device)
+            
+
+            # get data from miniImageNet
+            img_real = next(iter(MiniImageNet_data)).to(torch.float32) 
+
+
+            # extract img feature from clip for real image
+            real_image_embeddings = clip_model.encode_image(img_real).to(device)
 
 
             # extract features from text clip
-
             prompts, class_names = target_to_class_name(target)
-
             prompts_token = open_clip.tokenize(prompts).to(device)
             text_embeddings = clip_model.encode_text(prompts_token).to(device)
 
@@ -210,12 +210,24 @@ def main(opt):
             loss =  (images_loss + texts_loss) / 2.0 # shape: (batch_size)
             loss = loss.mean()
 
-            print(loss)
+            # Calculating the Loss for real image
+            logits = (image_embeddings @ real_image_embeddings.T) 
+            images_similarity = image_embeddings @ image_embeddings.T
+            real_image_similarity = real_image_embeddings @ real_image_embeddings.T
+            targets = F.softmax((images_similarity + real_image_similarity) / 2 , dim=-1)
+            real_image_loss = cross_entropy(logits, targets, reduction='none')
+            images_loss = cross_entropy(logits.T, targets.T, reduction='none')
+            loss_r =  (images_loss + real_image_loss) / 2.0 # shape: (batch_size)
+            loss_r = loss.mean()
 
+
+            Loss = loss + loss_r
+
+            print(Loss)
         
 
             # Backpropagate
-            loss.backward()
+            Loss.backward()
 
             # Update weights
             optimizer.step()

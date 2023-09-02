@@ -47,16 +47,18 @@ class MiniImageNet(Dataset):
         return image
 
 
-# intialize the dataset
-Dataset = MiniImageNet(img_list='../dataset/MiniImageNet/image_list.txt', img_dir='../dataset/MiniImageNet/')
-train_dataloader = DataLoader(Dataset, batch_size=32, shuffle=True)
+if __name__ == "__main__":
+    # intialize the dataset
+    Dataset = MiniImageNet(img_list='../dataset/MiniImageNet/image_list.txt', img_dir='../dataset/MiniImageNet/')
+    train_dataloader = DataLoader(Dataset, batch_size=32, shuffle=True)
 
-# Display an image from the batch
-train_features = next(iter(train_dataloader))
-print(f"Feature batch shape: {train_features.size()}")
-img = train_features[0].permute(1, 2, 0)  # Convert from (C, H, W) to (H, W, C)
-plt.imshow(img)
-plt.show()
+    # Display an image from the batch
+    train_features = next(iter(train_dataloader))
+    print(f"Feature batch shape: {train_features.size()}")
+    img = train_features[0].permute(1, 2, 0)  # Convert from (C, H, W) to (H, W, C)
+    plt.imshow(img)
+    plt.show()
+
 
 
 
