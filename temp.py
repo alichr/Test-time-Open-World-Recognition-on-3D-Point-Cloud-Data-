@@ -1,87 +1,133 @@
-# import numpy as np
-# import os
-
-
-# # # import numpy array from a file
-# # def import_numpy_array(file):
-# #     """
-# #     Import a numpy array from a file.
-
-# #     Parameters:
-# #     - file: The file to import the array from.
-
-# #     Returns:
-# #     - array: The imported array.
-# #     """
-# #     array = np.load(file)
-# #     return array
-
-# # vec = import_numpy_array("Distance.npy")
-# # # plot and show the array
-# # import matplotlib.pyplot as plt
-# # plt.plot(vec)
-# # plt.xlabel('sample')
-# # plt.ylabel('Distance')
-# # plt.show()
-
-# # load the array numoy
-# text_data = np.load("Save_Mean_text_feature_image1000.npy",allow_pickle=True)
-# # print the array
-
-# # make a dictionary out of 
-# # Define the dictionary with the given information
-# novel_class_dic = {
-#     26: ["n03337140", "n03742115", "n04550184"],
-#     27: ["n02791124", "n03376595", "n04099969"],
-#     28: ["n03179701"],
-#     29: ["n03782006"],
-#     30: ["n04239074"],
-#     31: ["n03961711"],
-#     32: ["n03201208", "n03982430"],
-#     33: ["n04344873"],
-#     34: ["0"],
-#     35: ["n04344873"],
-#     36: ["n04447861"]
-# }
-
-# # Function to find the key that matches the prediction
-# def find_matching_key(prediction, category_dict):
-#     for key, categories in category_dict.items():
-#         if prediction in categories:
-#             return key
-#     return None
-
-# pred = find_matching_key('0', novel_class_dic)
-# print(pred)
-
 import torch
-from PIL import Image
+import torch.nn as nn
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+import argparse
+from utils.dataloader import *
+from utils.mv_utils_zs import Realistic_Projection_random
 import open_clip
 
-model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
-tokenizer = open_clip.get_tokenizer('ViT-B-32')
 
-image = preprocess(Image.open("3D-to-2D-proj/guitar/test9.png")).unsqueeze(0)
-text = tokenizer([
-    "An image of a bottle.",
-    "An image of a car.",
-    "An image of a guitar.",
-    "A depth map of a person represents the varying distances of different points on their body from a specific viewpoint, crucial for creating 3D realism in computer graphics and computer vision applications.", 
-    "A depth map of a flower pot portrays a visual guide depicting the varying spatial gaps between the utilitarian structure, functional features, and practical design of the pot's construction and the viewer's designated angle, facilitating the generation of enhanced three-dimensional renderings.",
-    "A depth map of a vase presents a visual representation showcasing the diverse spatial distances between the intricate curves, delicate contours, and refined details of the vase's silhouette and the observer's chosen standpoint, contributing to the creation of immersive three-dimensional visualizations.", "an image of an airplane"])
-image_features = 0
-with torch.no_grad(), torch.cuda.amp.autocast():
-    for k in range(10):
-        print(k)
-        image_features = image_features + model.encode_image(preprocess(Image.open("3D-to-2D-proj/bottle/bottle_384.png")).unsqueeze(0))
-    
-    text_features = model.encode_text(text)
-    image_features /= image_features.norm(dim=-1, keepdim=True)
-    text_features /= text_features.norm(dim=-1, keepdim=True)
+def load_clip_model():
+    model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
+    return model, preprocess
 
-    print(text_features.shape)
-    print(image_features.shape)
+class PointCloudToDepthMap(nn.Module):
+    def __init__(self, resolution, depth):
+        super(PointCloudToDepthMap, self).__init__()
+        self.resolution = resolution
+        self.depth = depth
 
-    text_probs = (100.0 * image_features @ text_features.T).softmax(dim=-1)
+    def forward(self, point_cloud, transformation_matrices=None):
+        batch_size, num_points, _ = point_cloud.size()
 
-print("Label probs:", text_probs)  # prints: [[1., 0., 0.]]
+        if transformation_matrices is not None:
+            assert transformation_matrices.size(0) == batch_size, "Number of transformation matrices should match batch size"
+            assert transformation_matrices.size(1) == 3, "Transformation matrices should have shape (batch_size, 3, 4)"
+
+            # Extend the point_cloud to [batch_size, num_points, 4] with homogeneous coordinate 1
+            ones_column = torch.ones((batch_size, num_points, 1), device=point_cloud.device)
+            point_cloud_h = torch.cat((point_cloud, ones_column), dim=2)
+
+            # Expand the transformation matrices to (batch_size, 3, 4)
+            # and apply to each point in the point cloud
+            transformed_points_h = torch.matmul(point_cloud_h, transformation_matrices.permute(0, 2, 1))
+
+            # Remove the homogeneous coordinate
+            transformed_points = transformed_points_h[:, :, :3]
+
+        else:
+            transformed_points = point_cloud
+
+        normalized_points = transformed_points / self.depth
+
+        pixel_x = ((normalized_points[:, :, 0] + 1) / 2 * self.resolution).clamp(0, self.resolution - 1)
+        pixel_y = ((1 - normalized_points[:, :, 1]) / 2 * self.resolution).clamp(0, self.resolution - 1)
+
+        depth_map = torch.zeros((batch_size, self.resolution, self.resolution), dtype=torch.float32, device=point_cloud.device)
+
+        for i in range(batch_size):
+            for j in range(num_points):
+                x = int(pixel_x[i, j])
+                y = int(pixel_y[i, j])
+                depth = normalized_points[i, j, 2]
+                depth_map[i, y, x] = depth
+
+        depth_map = F.interpolate(depth_map.unsqueeze(1), size=(self.resolution, self.resolution), mode='bilinear', align_corners=False)
+        depth_map = depth_map.squeeze(1)
+
+        return depth_map
+
+# Example usage:
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--batch_size', type=int, default=32, help='input batch size')
+    parser.add_argument('--num_points', type=int, default=1024, help='number of points in each input point cloud')
+    parser.add_argument('--workers', type=int, help='number of data loading workers', default=4)
+    parser.add_argument('--nepoch', type=int, default=250, help='number of epochs to train for')
+    parser.add_argument('--outf', type=str, default='cls', help='output folder to save results')
+    parser.add_argument('--model', type=str, default='', help='path to load a pre-trained model')
+    parser.add_argument('--feature_transform', default= 'True' , action='store_true', help='use feature transform')
+    parser.add_argument('--manualSeed', type=int, default = 2, help='random seed')
+    parser.add_argument('--dataset_path', type=str, default= 'dataset/modelnet_scanobjectnn/', help="dataset path")
+    parser.add_argument('--ntasks', type=str, default= '1', help="number of tasks")
+    parser.add_argument('--nclasses', type=str, default= '26', help="number of classes")
+    parser.add_argument('--task', type=str, default= '0', help="task number")
+    parser.add_argument('--num_samples', type=str, default= '0', help="number of samples per class")
+
+    opt = parser.parse_args()
+
+    resolution = 64
+    depth = 1.5
+
+    path = Path(opt.dataset_path)
+
+    dataloader = DatasetGen(opt, root=path, fewshot=argument.fewshot)
+    t = 0
+    dataset = dataloader.get(t,'training')
+    trainloader = dataset[t]['train']
+    testloader = dataset[t]['test'] 
+
+    # sample data from train datalaoder
+    data = next(iter(trainloader))
+    batch_size = 32
+    proj = Realistic_Projection_random()
+    clip_model, clip_preprocess = load_clip_model()
+
+    point_cloud, target = data['pointclouds'].float(), data['labels']
+
+    # forward to Realistic Projection
+    features_2D_var = torch.zeros((20000, 512))
+    for w in range(10):
+        pc_prj = proj.get_img(point_cloud[w,:,:].unsqueeze(0))
+
+        features_2D = torch.zeros((200, 512))
+        with torch.no_grad():
+            pc_img = torch.nn.functional.interpolate(pc_prj, size=(224, 224), mode='bilinear', align_corners=True)
+            features_2D = clip_model.encode_image(pc_img)
+            features_2D_var[w*200:(w+1)*200,:] = features_2D
+        
+
+        
+
+    # use tsne to visualize the features
+    from sklearn.manifold import TSNE
+    tsne = TSNE(n_components=2, random_state=0)
+    features_2D_var = tsne.fit_transform(features_2D_var)
+    print(features_2D_var.shape)
+    # plot the result for the first 200 points with read color and the last 200 points with blue color
+    plt.scatter(features_2D_var[0:200,0], features_2D_var[0:200,1], c='r')
+    plt.scatter(features_2D_var[200:400,0], features_2D_var[200:400,1], c='b')
+    plt.scatter(features_2D_var[400:600,0], features_2D_var[400:600,1], c='g')
+    plt.scatter(features_2D_var[600:800,0], features_2D_var[600:800,1], c='y')
+    plt.scatter(features_2D_var[800:1000,0], features_2D_var[800:1000,1], c='m')
+    plt.scatter(features_2D_var[1000:1200,0], features_2D_var[1000:1200,1], c='c')
+    plt.scatter(features_2D_var[1200:1400,0], features_2D_var[1200:1400,1], c='k')
+    plt.scatter(features_2D_var[1400:1600,0], features_2D_var[1400:1600,1], c='tab:orange')
+    plt.scatter(features_2D_var[1600:1800,0], features_2D_var[1600:1800,1], c='tab:purple')
+    plt.scatter(features_2D_var[1800:2000,0], features_2D_var[1800:2000,1], c='tab:brown')
+  
+    plt.show()
+    print(features_2D_var.shape)
+
+

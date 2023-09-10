@@ -99,6 +99,8 @@ def main(opt):
             points = points.transpose(2, 1)
             features_3D, trans, trans_feat = feature_ext_3D(points)
 
+        
+            
             
             # Concatenate 2D and 3D features
             features = torch.cat((features_2D, features_3D), dim=1)
@@ -112,11 +114,19 @@ def main(opt):
             if opt.feature_transform:
                 loss += feature_transform_regularizer(trans_feat) * 0.001
 
+            
+            # Print gradients
+            
+        
+
             # Backpropagate
             loss.backward()
 
             # Update weights
             optimizer.step()
+            for name, param in feature_ext_3D.named_parameters(): 
+                print(f'Gradient of {name}:')
+                print(param.grad)
           #  scheduler.step()
 
             pred_choice = pred.data.max(1)[1]
@@ -148,6 +158,8 @@ def main(opt):
                 # Extract 3D features from PointNet
                 points = points.transpose(2, 1)
                 features_3D, _, _ = feature_ext_3D(points)
+
+                
 
                 # Concatenate 2D and 3D features
                 features = torch.cat((features_2D, features_3D), dim=1)
