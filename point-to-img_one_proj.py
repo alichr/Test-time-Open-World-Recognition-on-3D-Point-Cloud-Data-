@@ -226,6 +226,8 @@ def main(opt):
           #  print(transformation[0])
             # extract depth map
             points = points.transpose(2, 1)
+            print(points.shape)
+            print(transformation.shape)
             depth_map = proj.get_img(points, transformation)
             depth_map = torch.nn.functional.interpolate(depth_map, size=(224, 224), mode='bilinear', align_corners=True)
 
