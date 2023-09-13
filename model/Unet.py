@@ -21,48 +21,22 @@ class ConvBlock(nn.Module):
 class UNetPlusPlus(nn.Module):
     def __init__(self):
         super(UNetPlusPlus, self).__init__()
-        self.encoder1 = ConvBlock(1, 32)
-        self.encoder2 = ConvBlock(32, 64)
-        self.encoder3 = ConvBlock(64, 128)
-        self.encoder4 = ConvBlock(128, 256)
-        
-        self.center = ConvBlock(256, 512)
-        
-        self.decoder4 = ConvBlock(768, 256)
-        self.decoder3 = ConvBlock(384, 128)
-        self.decoder2 = ConvBlock(192, 64)
-        self.decoder1 = ConvBlock(96, 32)
-        
+        self.encoder = ConvBlock(1, 32)
+        self.center = ConvBlock(32, 64)
+        self.decoder = ConvBlock(96, 32)
         self.final_conv = nn.Conv2d(32, 3, kernel_size=1)
 
     def forward(self, x):
-        enc1 = self.encoder1(x)
-        enc2 = self.encoder2(enc1)
-        enc3 = self.encoder3(enc2)
-        enc4 = self.encoder4(enc3)
-        
-        center = self.center(enc4)
-        
-        dec4 = torch.cat([center, enc4], dim=1)
-        dec4 = self.decoder4(dec4)
-        
-        dec3 = torch.cat([dec4, enc3], dim=1)
-        dec3 = self.decoder3(dec3)
-        
-        dec2 = torch.cat([dec3, enc2], dim=1)
-        dec2 = self.decoder2(dec2)
-        
-        dec1 = torch.cat([dec2, enc1], dim=1)
-        dec1 = self.decoder1(dec1)
-        
-        output = self.final_conv(dec1)
+        enc = self.encoder(x)
+        center = self.center(enc)
+        dec = torch.cat([center, enc], dim=1)
+        dec = self.decoder(dec)
+        output = self.final_conv(dec)
         return output
-
 
 if __name__ == '__main__':
     # Initialize the lighter model
     model = UNetPlusPlus()
-    print(model)
 
     # Test the model with a random input
     random_input = torch.randn(1, 1, 224, 224)

@@ -57,7 +57,7 @@ def target_to_class_name(target):
     prompts = []
     calss_names = []
     for i in range(len(target.cpu().numpy())):
-        prompt = "A depth map of " + class_name[int(target[i].cpu().numpy())]
+        prompt = "An image of " + class_name[int(target[i].cpu().numpy())]
         prompts.append(prompt)
         calss_names.append(class_name[int(target[i].cpu().numpy())])
     return prompts, calss_names
@@ -94,6 +94,9 @@ def main(opt):
     feat_ext_3D = PointNetfeat(global_feat=True, feature_transform=opt.feature_transform).to(device)
     #feat_ext_3D.load_state_dict(torch.load(opt.model))
 
+    # define unet model
+    Unet = UNetPlusPlus().to(device)
+
     #for param in feat_ext_3D.parameters():
        # param.requires_grad = False
 
@@ -125,7 +128,7 @@ def main(opt):
         
         for i, data in enumerate(trainloader):
             if jj == 0:
-               sample_identifier_to_track = data['pcd_path'][0]
+               sample_identifier_to_track = data['pcd_path'][5]
                print(sample_identifier_to_track)
                jj = 1
             points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
@@ -150,13 +153,27 @@ def main(opt):
             
                 for k in range(3):
                         depth_map_tmp = proj.get_img(points, transformation[:, k, :, :].view(-1, 9))
-                        print(depth_map_tmp[0,:,0,0])
-                        stop
                         depth_map_tmp = torch.nn.functional.interpolate(depth_map_tmp, size=(224, 224), mode='bilinear', align_corners=True)
                         depth_map[k * points.shape[0]:(k + 1) * points.shape[0]] = depth_map_tmp
+
+                # extact mask from depth map and apply it to the rgb image
+
+                # reverse the depth map and extract the mask
+                depth_map_reverse = 1 - depth_map
+                mask = (depth_map_reverse != 0).float()
+               
                 
+                # depth map is with size (batch_size * 3, 3, 224, 224), get average in the dimension 1
+                depth_map = torch.mean(depth_map, dim=1).unsqueeze(1)
+                
+                # generate RGB image using unet model
+                img_RGB = Unet(depth_map)
+
+                # apply mask to the RGB image
+                img_RGB = img_RGB * mask
+
                 # extract img feature from clip
-                image_embeddings_tmp = clip_model.encode_image(depth_map).to(device)
+                image_embeddings_tmp = clip_model.encode_image(img_RGB).to(device)
                 image_embeddings = torch.zeros((points.shape[0], 512)).to(device)
                 for k in range(32):
                     rows_to_average = [0 + k, 32 + k, 64 + k]
@@ -171,10 +188,10 @@ def main(opt):
 
                 if sample_identifier_to_track in data['pcd_path']:
                     sample_index_in_batch = data['pcd_path'].index(sample_identifier_to_track)
-                    tracked_sample = depth_map[sample_index_in_batch]
+                    tracked_sample = img_RGB[sample_index_in_batch]
                     for s in range(3):
-                        img = depth_map[sample_index_in_batch + (32*s),:,:,:].squeeze(0).permute(1,2,0).detach().cpu().numpy()
-                        img = (img - img.min()) / (img.max() - img.min())
+                        img = img_RGB[sample_index_in_batch + (32*s),:,:,:].squeeze(0).permute(1,2,0).detach().cpu().numpy()
+                       # img = (img - img.min()) / (img.max() - img.min())
                         img = (img * 255).astype(np.uint8)
                         img = Image.fromarray(img)
                         img.save('3D-to-2D-proj/tmp/' + class_names[sample_index_in_batch] + '_' + str(k) + '_view_' + str(s) + '.png')
@@ -193,7 +210,7 @@ def main(opt):
 
                 # total loss
                 LOSS = loss + (loss_orthogonal / 10)
-                print(LOSS)
+                print(loss)
     
 
                 Loss += loss
