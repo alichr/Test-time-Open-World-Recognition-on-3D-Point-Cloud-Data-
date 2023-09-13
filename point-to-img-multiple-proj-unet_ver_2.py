@@ -168,6 +168,17 @@ def main(opt):
 
                 optimizer.zero_grad()
                 points = points.transpose(2, 1)
+
+                 # extract features from text clip
+                prompts = Prompts[int(target)]
+                print(prompts)
+                stop
+                class_name = Class_name[int(target).]
+              #  prompts, class_names = target_to_class_name(target)
+                prompts_token = open_clip.tokenize(prompts).to(device)
+                text_embeddings = clip_model.encode_text(prompts_token).to(device)
+
+                # extract
                 fea_pointnet, _, _ = feat_ext_3D(points)
                 
                 # Transformation matrix
@@ -210,10 +221,7 @@ def main(opt):
                     rows_to_average = [0 + k, 32 + k, 64 + k]
                     image_embeddings[k] = torch.mean(image_embeddings_tmp[rows_to_average, :], dim=0)
                 
-                # extract features from text clip
-                prompts, class_names = target_to_class_name(target)
-                prompts_token = open_clip.tokenize(prompts).to(device)
-                text_embeddings = clip_model.encode_text(prompts_token).to(device)
+               
 
                 # save img
 

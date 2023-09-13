@@ -34,13 +34,11 @@ class UNetPlusPlus(nn.Module):
         output = self.final_conv(dec)
         return output
 
+
+
+
 if __name__ == '__main__':
-    # Initialize the lighter model
     model = UNetPlusPlus()
-
-    # Test the model with a random input
-    random_input = torch.randn(1, 1, 224, 224)
-    output = model(random_input)
-
-    # Print the output shape
-    print(output.shape)  # Should be torch.Size([1, 3, 224, 224])
+    x = torch.randn(1, 1, 254, 254)
+    y = model(x)
+    print(y.shape)
