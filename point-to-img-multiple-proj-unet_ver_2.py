@@ -13,7 +13,7 @@ from PIL import Image
 from torch import nn
 torch.autograd.set_detect_anomaly(True)
 import matplotlib.pyplot as plt
-from model.Unet import UNetPlusPlus
+from model.Unet import UNetPlusPlusCondition, UNetPlusPlus
 from model.Transformation import Transformation
 from utils.Loss import CombinedConstraintLoss
 
@@ -124,6 +124,7 @@ def main(opt):
     #feat_ext_3D.load_state_dict(torch.load(opt.model))
 
     # define unet model
+    #Unet = UNetPlusPlusCondition(conditional_dim = 3).to(device)
     Unet = UNetPlusPlus().to(device)
 
     #for param in feat_ext_3D.parameters():
@@ -159,7 +160,7 @@ def main(opt):
         
         for i, data in enumerate(trainloader):
             if jj == 0:
-               sample_identifier_to_track = data['pcd_path'][5]
+               sample_identifier_to_track = data['pcd_path'][8]
                print(sample_identifier_to_track)
                jj = 1
             points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
@@ -170,10 +171,20 @@ def main(opt):
                 points = points.transpose(2, 1)
 
                  # extract features from text clip
-                prompts = Prompts[int(target)]
-                print(prompts)
-                stop
-                class_name = Class_name[int(target).]
+                # extract elements of Promompt given traget
+                class_names = []
+                prompts = []
+                RGB = []
+                RGB_background = []
+                for q in range (32):
+                    class_names.append(Class_name[int(target[q])])
+                    prompts.append(Prompts[int(target[q])])
+                    RGB.append(RGB_codes[int(target[q])])
+                    RGB_background.append([1, 1, 1])
+                RGB_background = torch.tensor(RGB_background).to(device)
+                # convert RGB to tensor of size (32, 3)
+                RGB = torch.tensor(RGB).to(device)
+    
               #  prompts, class_names = target_to_class_name(target)
                 prompts_token = open_clip.tokenize(prompts).to(device)
                 text_embeddings = clip_model.encode_text(prompts_token).to(device)
@@ -204,15 +215,21 @@ def main(opt):
                 depth_map_reverse = 1 - depth_map
                 mask = (depth_map_reverse != 0).float()
                
+                img_RGB_init = torch.multiply(torch.cat([RGB, RGB, RGB], dim=0).unsqueeze(-1).unsqueeze(-1), torch.mean((1 -depth_map)*mask, dim=1).unsqueeze(1))  + torch.multiply(torch.cat([RGB_background, RGB_background, RGB_background], dim=0).unsqueeze(-1).unsqueeze(-1), torch.mean((1 -mask), dim=1).unsqueeze(1))
+                
+               
                 
                 # depth map is with size (batch_size * 3, 3, 224, 224), get average in the dimension 1
-                depth_map = torch.mean(depth_map, dim=1).unsqueeze(1)
+              #  print(torch.cat([RGB_background, RGB_background, RGB], dim=0).unsqueeze(-1).shape)
+             #   print(torch.mean(depth_map, dim=1).unsqueeze(1).shape)
+               # img_RGB = torch.multiply(torch.cat([RGB, RGB, RGB], dim=0).unsqueeze(-1).unsqueeze(-1), torch.ones_like(depth_map)) * 0.6 + (1 - depth_map)*mask* 0.4  + torch.multiply(torch.cat([RGB_background, RGB_background, RGB_background], dim=0).unsqueeze(-1).unsqueeze(-1), torch.mean((1 -mask), dim=1).unsqueeze(1))
                 
                 # generate RGB image using unet model
-                img_RGB = Unet(depth_map)
+                img_RGB = Unet(img_RGB_init)
+                
 
                 # apply mask to the RGB image
-                img_RGB = img_RGB * mask
+                #img_RGB = img_RGB * mask
 
                 # extract img feature from clip
                 image_embeddings_tmp = clip_model.encode_image(img_RGB).to(device)
@@ -223,7 +240,6 @@ def main(opt):
                 
                
 
-                # save img
 
                 if sample_identifier_to_track in data['pcd_path']:
                     sample_index_in_batch = data['pcd_path'].index(sample_identifier_to_track)
