@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 from model.Unet import UNetPlusPlusCondition, UNetPlusPlus
 from model.Transformation import Transformation
 from utils.Loss import CombinedConstraintLoss
+from torchmetrics.functional.image import image_gradients
+# define a function to load the CLIP model
 
 
 
@@ -115,9 +117,12 @@ def main(opt):
     trainloader = dataset[t]['train']
     testloader = dataset[t]['test']
 
+    mse_loss = nn.MSELoss()
+
     # Load CLIP model and preprocessing function
     clip_model, clip_preprocess = load_clip_model()
     clip_model = clip_model.to(device)
+
 
     # define pointnet feature extractor
     feat_ext_3D = PointNetfeat(global_feat=True, feature_transform=opt.feature_transform).to(device)
@@ -180,7 +185,7 @@ def main(opt):
                     class_names.append(Class_name[int(target[q])])
                     prompts.append(Prompts[int(target[q])])
                     RGB.append(RGB_codes[int(target[q])])
-                    RGB_background.append([1, 1, 1])
+                    RGB_background.append([0.5, 0.5, 0.9])
                 RGB_background = torch.tensor(RGB_background).to(device)
                 # convert RGB to tensor of size (32, 3)
                 RGB = torch.tensor(RGB).to(device)
@@ -216,6 +221,7 @@ def main(opt):
                 mask = (depth_map_reverse != 0).float()
                
                 img_RGB_init = torch.multiply(torch.cat([RGB, RGB, RGB], dim=0).unsqueeze(-1).unsqueeze(-1), torch.mean((1 -depth_map)*mask, dim=1).unsqueeze(1))  + torch.multiply(torch.cat([RGB_background, RGB_background, RGB_background], dim=0).unsqueeze(-1).unsqueeze(-1), torch.mean((1 -mask), dim=1).unsqueeze(1))
+                dy_init, dx_init = image_gradients(img_RGB_init)
                 
                
                 
@@ -226,6 +232,9 @@ def main(opt):
                 
                 # generate RGB image using unet model
                 img_RGB = Unet(img_RGB_init)
+                dy, dx = image_gradients(img_RGB)
+
+
                 
 
                 # apply mask to the RGB image
@@ -264,8 +273,10 @@ def main(opt):
                 loss = loss.mean()
 
                 # total loss
-                LOSS = loss + (loss_orthogonal / 10)
-                print(loss)
+                LOSS = loss + (loss_orthogonal / 10) + 100*mse_loss(dy, dy_init) + 100*mse_loss(dx, dx_init)
+                print(LOSS,loss, loss_orthogonal, mse_loss(dy, dy_init), mse_loss(dx, dx_init))
+
+
     
 
                 Loss += loss
