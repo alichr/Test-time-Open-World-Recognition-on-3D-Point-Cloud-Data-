@@ -17,7 +17,6 @@ from model.Unet import UNetPlusPlusCondition, UNetPlusPlus
 from model.Transformation import Transformation
 from utils.Loss import CombinedConstraintLoss
 from torchmetrics.functional.image import image_gradients
-# define a function to load the CLIP model
 
 
 
@@ -116,20 +115,17 @@ def main(opt):
     dataset = dataloader.get(t,'training')
     trainloader = dataset[t]['train']
     testloader = dataset[t]['test']
-
     mse_loss = nn.MSELoss()
 
     # Load CLIP model and preprocessing function
     clip_model, clip_preprocess = load_clip_model()
     clip_model = clip_model.to(device)
 
-
     # define pointnet feature extractor
     feat_ext_3D = PointNetfeat(global_feat=True, feature_transform=opt.feature_transform).to(device)
     #feat_ext_3D.load_state_dict(torch.load(opt.model))
 
     # define unet model
-    #Unet = UNetPlusPlusCondition(conditional_dim = 3).to(device)
     Unet = UNetPlusPlus().to(device)
 
     #for param in feat_ext_3D.parameters():
@@ -160,41 +156,31 @@ def main(opt):
     kkk = 0
     jj = 0
     Loss = 0
+    kkkk = 0
 
     for epoch in range(opt.nepoch):
         
         for i, data in enumerate(trainloader):
             if jj == 0:
-               sample_identifier_to_track = data['pcd_path'][8]
+               sample_identifier_to_track = data['pcd_path'][12]
                print(sample_identifier_to_track)
                jj = 1
             points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
             points, target = points.to(device), target.to(device)
-            if points.shape[0] == 32:
+            if points.shape[0] == 16:
 
                 optimizer.zero_grad()
                 points = points.transpose(2, 1)
 
                  # extract features from text clip
                 # extract elements of Promompt given traget
-                class_names = []
-                prompts = []
-                RGB = []
-                RGB_background = []
-                for q in range (32):
-                    class_names.append(Class_name[int(target[q])])
-                    prompts.append(Prompts[int(target[q])])
-                    RGB.append(RGB_codes[int(target[q])])
-                    RGB_background.append([0.5, 0.5, 0.9])
-                RGB_background = torch.tensor(RGB_background).to(device)
-                # convert RGB to tensor of size (32, 3)
-                RGB = torch.tensor(RGB).to(device)
+                prompts, class_names =  target_to_class_name(target)                
     
               #  prompts, class_names = target_to_class_name(target)
                 prompts_token = open_clip.tokenize(prompts).to(device)
                 text_embeddings = clip_model.encode_text(prompts_token).to(device)
 
-                # extract
+                # extract 3D features
                 fea_pointnet, _, _ = feat_ext_3D(points)
                 
                 # Transformation matrix
@@ -204,71 +190,48 @@ def main(opt):
                 loss_orthogonal = constraint_loss(transformation).mean()
                 
                 # extract depth map
-                points = points.transpose(2, 1)
-                #depth_map = proj.get_img(points, transformation[:, 0, :, :].view(-1, 9))
-                
+                points = points.transpose(2, 1)                
                 depth_map = torch.zeros((points.shape[0] * 3, 3, 224, 224)).to(device)
-                print(transformation[:, 0, :, :].view(-1, 9).shape)
-                print(points.shape)
-                
-            
                 for k in range(3):
                         depth_map_tmp = proj.get_img(points, transformation[:, k, :, :].view(-1, 9))
                         depth_map_tmp = torch.nn.functional.interpolate(depth_map_tmp, size=(224, 224), mode='bilinear', align_corners=True)
                         depth_map[k * points.shape[0]:(k + 1) * points.shape[0]] = depth_map_tmp
 
-                # extact mask from depth map and apply it to the rgb image
-
                 # reverse the depth map and extract the mask
                 depth_map_reverse = 1 - depth_map
                 mask = (depth_map_reverse != 0).float()
-               
-                img_RGB_init = torch.multiply(torch.cat([RGB, RGB, RGB], dim=0).unsqueeze(-1).unsqueeze(-1), torch.mean((1 -depth_map)*mask, dim=1).unsqueeze(1))  + torch.multiply(torch.cat([RGB_background, RGB_background, RGB_background], dim=0).unsqueeze(-1).unsqueeze(-1), torch.mean((1 -mask), dim=1).unsqueeze(1))
-                dy_init, dx_init = image_gradients(img_RGB_init)
                 
-               
+                # extract texture image
+                texture_tmp = Unet(mask)
+                texture = texture_tmp * mask
+                dy, dx = image_gradients(texture)
+                # loss for gradient
+                loss_gradient = 1000*mse_loss(dy, torch.zeros_like(dy)) + 1000*mse_loss(dx, torch.zeros_like(dx))
                 
-                # depth map is with size (batch_size * 3, 3, 224, 224), get average in the dimension 1
-              #  print(torch.cat([RGB_background, RGB_background, RGB], dim=0).unsqueeze(-1).shape)
-             #   print(torch.mean(depth_map, dim=1).unsqueeze(1).shape)
-               # img_RGB = torch.multiply(torch.cat([RGB, RGB, RGB], dim=0).unsqueeze(-1).unsqueeze(-1), torch.ones_like(depth_map)) * 0.6 + (1 - depth_map)*mask* 0.4  + torch.multiply(torch.cat([RGB_background, RGB_background, RGB_background], dim=0).unsqueeze(-1).unsqueeze(-1), torch.mean((1 -mask), dim=1).unsqueeze(1))
-                
-                # generate RGB image using unet model
-                img_RGB = Unet(img_RGB_init)
-                dy, dx = image_gradients(img_RGB)
-
-                # magnitude of the gradient
-                magnitude = torch.sqrt(torch.pow(dy, 2) + torch.pow(dx, 2))
-                loss_gradient = torch.mean(magnitude)
-                
-
-
-
-                
-
-                # apply mask to the RGB image
-                #img_RGB = img_RGB * mask
+                # merge the depth map and texture image
+                img_RGB = depth_map_reverse * texture
 
                 # extract img feature from clip
                 image_embeddings_tmp = clip_model.encode_image(img_RGB).to(device)
                 image_embeddings = torch.zeros((points.shape[0], 512)).to(device)
-                for k in range(32):
-                    rows_to_average = [0 + k, 32 + k, 64 + k]
+                for k in range(16):
+                    rows_to_average = [0 + k, 16 + k, 32 + k]
                     image_embeddings[k] = torch.mean(image_embeddings_tmp[rows_to_average, :], dim=0)
                 
                
 
+                # save img
 
                 if sample_identifier_to_track in data['pcd_path']:
                     sample_index_in_batch = data['pcd_path'].index(sample_identifier_to_track)
                     tracked_sample = img_RGB[sample_index_in_batch]
                     for s in range(3):
-                        img = img_RGB[sample_index_in_batch + (32*s),:,:,:].squeeze(0).permute(1,2,0).detach().cpu().numpy()
+                        img = img_RGB[sample_index_in_batch + (16*s),:,:,:].squeeze(0).permute(1,2,0).detach().cpu().numpy()
                        # img = (img - img.min()) / (img.max() - img.min())
                         img = (img * 255).astype(np.uint8)
                         img = Image.fromarray(img)
-                        img.save('3D-to-2D-proj/tmp/' + class_names[sample_index_in_batch] + '_' + str(k) + '_view_' + str(s) + '.png')
-                    k += 1
+                        img.save('3D-to-2D-proj/tmp/' + class_names[sample_index_in_batch] + '_view_' + str(s) + '_' + str(kkkk) +  '.png')
+                    kkkk += 1
                     print('save image')
 
                 # Calculating the Loss
@@ -282,17 +245,14 @@ def main(opt):
                 loss = loss.mean()
 
                 # total loss
-                LOSS = loss + (loss_orthogonal / 10) + 100*mse_loss(dy, dy_init) + 100*mse_loss(dx, dx_init)
-                print(LOSS,loss, loss_orthogonal, mse_loss(dy, dy_init), mse_loss(dx, dx_init))
-
-
-    
+                LOSS = loss + (loss_orthogonal / 10) + loss_gradient
 
                 Loss += loss
                 kkk += 1
 
                 if kkk == 200:
-                    print(Loss/200)
+                    print('epoch', epoch, 'total loss', LOSS, 'embedding loss:', loss, 'orthogonal loss:', loss_orthogonal, 'gradient loss:', loss_gradient)
+                    print('----------------------------------------------------------------------------------------')
                     kkk = 0
                     Loss = 0
 
@@ -301,7 +261,29 @@ def main(opt):
 
         torch.save(feat_ext_3D.state_dict(), '%s/3D_model_%d.pth' % (opt.outf, epoch))
         torch.save(Trans.state_dict(), '%s/Transformation_%d.pth' % (opt.outf, epoch))
+        torch.save(Unet.state_dict(), '%s/Unet_%d.pth' % (opt.outf, epoch))
 
+        # test the trained model
+        prompts, class_names =  target_to_class_name(target)                
+        prompts_token = open_clip.tokenize(prompts).to(device)
+        text_embeddings = clip_model.encode_text(prompts_token).to(device)
+        feat_ext_3D.eval()
+        Trans.eval()
+        Unet.eval()
+        for j, data in tqdm(enumerate(testloader, 0)):
+            points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
+            points, target = points.to(device), target.to(device)
+            points = points.transpose(2, 1)
+            # extract 3D features
+            fea_pointnet, _, _ = feat_ext_3D(points)
+                
+            # Transformation matrix
+            transformation = Trans(fea_pointnet)
+
+
+        feat_ext_3D.train()
+        Trans.train()
+        Unet.train()
           
 
 
@@ -309,7 +291,7 @@ def main(opt):
 if __name__ == "__main__":
     # Set up command-line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch_size', type=int, default=32, help='input batch size')
+    parser.add_argument('--batch_size', type=int, default=16, help='input batch size')
     parser.add_argument('--num_points', type=int, default=1024, help='number of points in each input point cloud')
     parser.add_argument('--workers', type=int, help='number of data loading workers', default=4)
     parser.add_argument('--nepoch', type=int, default=250, help='number of epochs to train for')

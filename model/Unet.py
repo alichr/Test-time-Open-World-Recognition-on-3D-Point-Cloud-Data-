@@ -32,6 +32,7 @@ class UNetPlusPlus(nn.Module):
         dec = torch.cat([center, enc], dim=1)
         dec = self.decoder(dec)
         output = self.final_conv(dec)
+        output = torch.sigmoid(output)
         return output
 
 
