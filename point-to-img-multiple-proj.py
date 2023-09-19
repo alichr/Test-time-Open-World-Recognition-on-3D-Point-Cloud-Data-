@@ -110,113 +110,116 @@ def main(opt):
     Loss = 0
     kkkk = 0
 
-    for epoch in range(opt.nepoch):
+    # for epoch in range(opt.nepoch):
         
-        for i, data in enumerate(trainloader):
-            if jj == 0:
-               sample_identifier_to_track = data['pcd_path'][12]
-               print(sample_identifier_to_track)
-               jj = 1
-            points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
-            points, target = points.to(device), target.to(device)
-            if points.shape[0] == 16:
+    #     for i, data in enumerate(trainloader):
+    #         if jj == 0:
+    #            sample_identifier_to_track = data['pcd_path'][12]
+    #            print(sample_identifier_to_track)
+    #            jj = 1
+    #         points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
+    #         points, target = points.to(device), target.to(device)
+    #         if points.shape[0] == 16:
 
-                optimizer.zero_grad()
-                points = points.transpose(2, 1)
+    #             optimizer.zero_grad()
+    #             points = points.transpose(2, 1)
 
-                # extract elements of Promompt given traget
-                prompts, class_names =  target_to_class_name(target)                
-                prompts_token = open_clip.tokenize(prompts).to(device)
-                text_embeddings = clip_model.encode_text(prompts_token).to(device)
+    #             # extract elements of Promompt given traget
+    #             prompts, class_names =  target_to_class_name(target)                
+    #             prompts_token = open_clip.tokenize(prompts).to(device)
+    #             text_embeddings = clip_model.encode_text(prompts_token).to(device)
 
-                # extract 3D features
-                fea_pointnet, _, _ = feat_ext_3D(points)
+    #             # extract 3D features
+    #             fea_pointnet, _, _ = feat_ext_3D(points)
                 
-                # Transformation matrix
-                transformation = Trans(fea_pointnet)
+    #             # Transformation matrix
+    #             transformation = Trans(fea_pointnet)
 
-                # apply orthogonality to the transformation matrix
-                loss_orthogonal = constraint_loss(transformation).mean()
+    #             # apply orthogonality to the transformation matrix
+    #             loss_orthogonal = constraint_loss(transformation).mean()
                 
-                # extract depth map
-                points = points.transpose(2, 1)                
-                depth_map = torch.zeros((points.shape[0] * 3, 3, 224, 224)).to(device)
-                for k in range(3):
-                        depth_map_tmp = proj.get_img(points, transformation[:, k, :, :].view(-1, 9))
-                        depth_map_tmp = torch.nn.functional.interpolate(depth_map_tmp, size=(224, 224), mode='bilinear', align_corners=True)
-                        depth_map[k * points.shape[0]:(k + 1) * points.shape[0]] = depth_map_tmp
+    #             # extract depth map
+    #             points = points.transpose(2, 1)                
+    #             depth_map = torch.zeros((points.shape[0] * 3, 3, 224, 224)).to(device)
+    #             for k in range(3):
+    #                     depth_map_tmp = proj.get_img(points, transformation[:, k, :, :].view(-1, 9))
+    #                     depth_map_tmp = torch.nn.functional.interpolate(depth_map_tmp, size=(224, 224), mode='bilinear', align_corners=True)
+    #                     depth_map[k * points.shape[0]:(k + 1) * points.shape[0]] = depth_map_tmp
 
 
-                # extract img feature from clip
-                image_embeddings_tmp = clip_model.encode_image(depth_map).to(device)
-                image_embeddings = torch.zeros((points.shape[0], 512)).to(device)
-                for k in range(16):
-                    rows_to_average = [0 + k, 16 + k, 32 + k]
-                    image_embeddings[k] = torch.mean(image_embeddings_tmp[rows_to_average, :], dim=0)
+    #             # extract img feature from clip
+    #             image_embeddings_tmp = clip_model.encode_image(depth_map).to(device)
+    #             image_embeddings = torch.zeros((points.shape[0], 512)).to(device)
+    #             for k in range(16):
+    #                 rows_to_average = [0 + k, 16 + k, 32 + k]
+    #                 image_embeddings[k] = torch.mean(image_embeddings_tmp[rows_to_average, :], dim=0)
                 
-                # save img
-                if sample_identifier_to_track in data['pcd_path']:
-                    sample_index_in_batch = data['pcd_path'].index(sample_identifier_to_track)
-                    tracked_sample = depth_map[sample_index_in_batch]
-                    for s in range(3):
-                        img = depth_map[sample_index_in_batch + (16*s),:,:,:].squeeze(0).permute(1,2,0).detach().cpu().numpy()
-                       # img = (img - img.min()) / (img.max() - img.min())
-                        img = (img * 255).astype(np.uint8)
-                        img = Image.fromarray(img)
-                        img.save('3D-to-2D-proj/tmp/' + class_names[sample_index_in_batch] + '_view_' + str(s) + '_' + str(kkkk) +  '.png')
-                    kkkk += 1
-                    print('save image')
+    #             # save img
+    #             if sample_identifier_to_track in data['pcd_path']:
+    #                 sample_index_in_batch = data['pcd_path'].index(sample_identifier_to_track)
+    #                 tracked_sample = depth_map[sample_index_in_batch]
+    #                 for s in range(3):
+    #                     img = depth_map[sample_index_in_batch + (16*s),:,:,:].squeeze(0).permute(1,2,0).detach().cpu().numpy()
+    #                    # img = (img - img.min()) / (img.max() - img.min())
+    #                     img = (img * 255).astype(np.uint8)
+    #                     img = Image.fromarray(img)
+    #                     img.save('3D-to-2D-proj/tmp/' + class_names[sample_index_in_batch] + '_view_' + str(s) + '_' + str(kkkk) +  '.png')
+    #                 kkkk += 1
+    #                 print('save image')
 
-                # Calculating the Loss
-                logits = (text_embeddings @ image_embeddings.T)
-                images_similarity = image_embeddings @ image_embeddings.T
-                texts_similarity = text_embeddings @ text_embeddings.T
-                targets = F.softmax((images_similarity + texts_similarity) / 2 , dim=-1)
-                texts_loss = cross_entropy(logits, targets, reduction='none')
-                images_loss = cross_entropy(logits.T, targets.T, reduction='none')
-                loss =  (images_loss + texts_loss) / 2.0 # shape: (batch_size)
-                loss = loss.mean()
+    #             # Calculating the Loss
+    #             logits = (text_embeddings @ image_embeddings.T)
+    #             images_similarity = image_embeddings @ image_embeddings.T
+    #             texts_similarity = text_embeddings @ text_embeddings.T
+    #             targets = F.softmax((images_similarity + texts_similarity) / 2 , dim=-1)
+    #             texts_loss = cross_entropy(logits, targets, reduction='none')
+    #             images_loss = cross_entropy(logits.T, targets.T, reduction='none')
+    #             loss =  (images_loss + texts_loss) / 2.0 # shape: (batch_size)
+    #             loss = loss.mean()
 
-                # total loss
-                LOSS = loss + (loss_orthogonal / 10) 
-                Loss += loss
-                kkk += 1
+    #             # total loss
+    #             LOSS = loss + (loss_orthogonal / 10) 
+    #             Loss += loss
+    #             kkk += 1
 
-                if kkk == 200:
-                    print('epoch', epoch, 'total loss', LOSS, 'embedding loss:', loss, 'orthogonal loss:', loss_orthogonal)
-                    print('----------------------------------------------------------------------------------------')
-                    kkk = 0
-                    Loss = 0
+    #             if kkk == 200:
+    #                 print('epoch', epoch, 'total loss', LOSS, 'embedding loss:', loss, 'orthogonal loss:', loss_orthogonal)
+    #                 print('----------------------------------------------------------------------------------------')
+    #                 kkk = 0
+    #                 Loss = 0
 
-                LOSS.backward()
-                optimizer.step()
+    #             LOSS.backward()
+    #             optimizer.step()
 
-        torch.save(feat_ext_3D.state_dict(), '%s/3D_model_%d.pth' % (opt.outf, epoch))
-        torch.save(Trans.state_dict(), '%s/Transformation_%d.pth' % (opt.outf, epoch))
+    #     torch.save(feat_ext_3D.state_dict(), '%s/3D_model_%d.pth' % (opt.outf, epoch))
+    #     torch.save(Trans.state_dict(), '%s/Transformation_%d.pth' % (opt.outf, epoch))
 
         # test the trained model on the training 
         # a list of 0 to 25
+
         
-        class_label_list = 
-        prompts, class_names =  target_to_class_name(target)                
-        prompts_token = open_clip.tokenize(prompts).to(device)
-        text_embeddings = clip_model.encode_text(prompts_token).to(device)
-        feat_ext_3D.eval()
-        Trans.eval()
-        for j, data in tqdm(enumerate(testloader, 0)):
-            points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
-            points, target = points.to(device), target.to(device)
-            points = points.transpose(2, 1)
-            # extract 3D features
-            fea_pointnet, _, _ = feat_ext_3D(points)
-                
-            # Transformation matrix
-            transformation = Trans(fea_pointnet)
+    class_label_list = list(range(25))
+    prompts, class_names =  target_to_class_name(class_label_list)    
+    print(prompts)
+    stop            
+    prompts_token = open_clip.tokenize(prompts).to(device)
+    text_embeddings = clip_model.encode_text(prompts_token).to(device)
+    feat_ext_3D.eval()
+    Trans.eval()
+    for j, data in tqdm(enumerate(testloader, 0)):
+        points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
+        points, target = points.to(device), target.to(device)
+        points = points.transpose(2, 1)
+        # extract 3D features
+        fea_pointnet, _, _ = feat_ext_3D(points)
+            
+        # Transformation matrix
+        transformation = Trans(fea_pointnet)
 
 
-        feat_ext_3D.train()
-        Trans.train()
-        Unet.train()
+    feat_ext_3D.train()
+    Trans.train()
+    Unet.train()
           
 
 
