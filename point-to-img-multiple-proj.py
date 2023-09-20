@@ -84,6 +84,9 @@ def main(opt):
     t = 0
     dataset = dataloader.get(t,'training')
     trainloader = dataset[t]['train']
+
+    t = 1
+    dataset = dataloader.get(t,'training')
     testloader = dataset[t]['test']
 
     # Load CLIP model and preprocessing function
@@ -111,7 +114,9 @@ def main(opt):
     jj = 0
     Loss = 0
     kkkk = 0
-
+    number_of_iteration = 0
+    loss_tmp = 0
+    loss_orthogonal_tmp = 0
     for epoch in range(opt.nepoch):
         
         for i, data in enumerate(trainloader):
@@ -122,7 +127,7 @@ def main(opt):
             points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
             points, target = points.to(device), target.to(device)
             if points.shape[0] == 16:
-
+                number_of_iteration = number_of_iteration + 1
                 optimizer.zero_grad()
                 points = points.transpose(2, 1)
 
@@ -180,17 +185,16 @@ def main(opt):
 
                 # total loss
                 LOSS = loss + (loss_orthogonal / 10) 
-                Loss += loss
-                kkk += 1
-
-                if kkk == 200:
-                    print('epoch', epoch, 'total loss', LOSS, 'embedding loss:', loss, 'orthogonal loss:', loss_orthogonal)
-                    kkk = 0
-                    Loss = 0
-
+                loss_tmp += loss
+                loss_orthogonal_tmp += loss_orthogonal
+                
                 LOSS.backward()
                 optimizer.step()
+        # print loss value after each epoch
 
+        print('epoch', epoch, 'total loss', (loss_tmp/number_of_iteration + loss_orthogonal_tmp/number_of_iteration), 'embedding loss:', loss_tmp/number_of_iteration, 'orthogonal loss:', loss_orthogonal_tmp/number_of_iteration)
+        embedding_loss = 0
+        orthogonal_loss = 0
         torch.save(feat_ext_3D.state_dict(), '%s/3D_model_%d.pth' % (opt.outf, epoch))
         torch.save(Trans.state_dict(), '%s/Transformation_%d.pth' % (opt.outf, epoch))
 
@@ -241,10 +245,18 @@ def main(opt):
                     number_correct_prdiction += torch.sum(predicted == target).item()
                     number_training_sample += points.shape[0]
         print('accuracy on training set:', number_correct_prdiction / number_training_sample)
-
+  
         # evalute on the test samples
-        number_training_sample = 0
-        number_correct_prdiction = 0
+        class_label_list = torch.tensor(list(range(37)))
+        prompts, class_names =  target_to_class_name(class_label_list)                    
+        prompts_token = open_clip.tokenize(prompts).to(device)
+        text_embeddings = clip_model.encode_text(prompts_token).to(device)
+       # number_training_sample = 0
+       # number_correct_prdiction = 0
+        number_correct_prdiction_base_task = 0
+        number_training_sample_base_task = 0
+        number_correct_prdiction_novel_task = 0
+        number_training_sample_novel_task = 0
         for j, data in tqdm(enumerate(testloader, 0)):
             if data['pointclouds'].shape[0] == 16:
                 with torch.no_grad():
@@ -275,13 +287,21 @@ def main(opt):
                     logits = (100.0 * image_embeddings @ text_embeddings.T).softmax(dim=-1)
                     
                     _, predicted = torch.max(logits, 1)
-                    number_correct_prdiction += torch.sum(predicted == target).item()
-                    number_training_sample += points.shape[0]
-        print('accuracy on test set:', number_correct_prdiction / number_training_sample)
+                    for i in range(target.shape[0]):
+                        if target[i] < 26:
+                            number_correct_prdiction_base_task += torch.sum(predicted[i] == target[i]).item()
+                            number_training_sample_base_task += 1
+                        else:
+                            number_correct_prdiction_novel_task += torch.sum(predicted[i] == target[i]).item()
+                            number_training_sample_novel_task += 1
+        print('accuracy on base task:', number_correct_prdiction_base_task / number_training_sample_base_task)
+        print('accuracy on novel task:', number_correct_prdiction_novel_task / number_training_sample_novel_task)
+        print('accuracy on test set:', (number_correct_prdiction_base_task + number_correct_prdiction_novel_task) / (number_training_sample_base_task + number_training_sample_novel_task))
+        print('--------------------------------------------------------------------------------------------------')
         feat_ext_3D.train()
         Trans.train()
         clip_model.train()
-        print('---------------------------------------------------------------------------------')
+        
             
 
 
