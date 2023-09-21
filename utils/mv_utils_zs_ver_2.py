@@ -175,7 +175,7 @@ class Realistic_Projection:
 
         self.grid2image = Grid2Image()
 
-    def get_img(self, points, ali):
+    def get_img(self, points):
         b, _, _ = points.shape
         v = self.translation.shape[0]
 

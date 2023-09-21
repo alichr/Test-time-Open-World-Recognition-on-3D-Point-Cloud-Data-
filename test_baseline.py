@@ -7,8 +7,10 @@ from tqdm import tqdm
 import open_clip
 from utils.mv_utils_zs import Realistic_Projection
 from model.PointNet import PointNetfeat, feature_transform_regularizer
-from utils.dataloader import *
+from utils.dataloader_ModelNet40 import *
 import os
+import numpy as np
+from matplotlib import pyplot as plt
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -19,6 +21,12 @@ def clip_similarity(image_features, text_features):
     text_probs = (100.0 * image_features @ text_features.T).softmax(dim=-1)
     return text_probs
 
+
+def set_random_seed(seed):
+    random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 # read a txt file line by line and save it in a list, and remove the empty lines
 def read_txt_file(file):
@@ -31,23 +39,27 @@ def read_txt_file(file):
     array = list(filter(None, array))
     return array
 
-  
+def accuracy(output, target, topk=(1,)):
+    pred = output.topk(max(topk), 1, True, True)[1].t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred))
+    return [float(correct[:k].reshape(-1).float().sum(0, keepdim=True).cpu().numpy()) for k in topk]
 
 
 # define the main function
 def main(opt):
-    Distance_base_samples = np.zeros(1496)
-    Distance_novel_samples = np.zeros(475)
+
+    set_random_seed(opt.manualSeed) 
     # deine data loader
-    dataloader = DatasetGen(opt, root=Path(opt.dataset_path), fewshot=argument.fewshot)
-    t = 1
-    dataset = dataloader.get(t,'Test')
-    testloader = dataset[t]['test']
-    print("Test dataset size:", len(testloader.dataset))
+    train_dataset = ModelNetDataLoader(root='dataset/modelnet40_normal_resampled/', args=opt, split='train', process_data=opt.process_data)
+    test_dataset = ModelNetDataLoader(root='dataset/modelnet40_normal_resampled/', args=opt, split='test', process_data=opt.process_data)
+
+
+
     # Step 1: Load CLIP model
-    clip_model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
+    clip_model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-16', pretrained='laion2b_s34b_b88k')
     clip_model.to(device)
     clip_model.eval()
+
 
     # Step 2: Load Realistic Projection object
     proj = Realistic_Projection()
@@ -55,7 +67,7 @@ def main(opt):
     
 
     #load the text features
-    prompts = read_txt_file("class_name.txt")
+    prompts = read_txt_file("class_name_modelnet40.txt")
     text_features_tmp = torch.zeros((len(prompts), 512), device=device)
     text = 0
     for prompt in prompts:
@@ -67,57 +79,47 @@ def main(opt):
     text_features = text_features_tmp
  
 
-    
-
-
-    # # load the text features
-    # prompts = read_txt_file("chatgpt_description.txt")
-    # text_features_tmp = torch.zeros((len(prompts), 512), device=device)
-    # text = 0
-    # for prompt in prompts:
-    #     text = open_clip.tokenize([prompt])
-    #     with torch.no_grad(), torch.cuda.amp.autocast():
-    #         text_features_tmp[prompts.index(prompt)] = clip_model.encode_text(text)
-        
-    # text_features = torch.zeros((int(len(prompts)/4), 512), device=device)
-    # for i in range(37):
-    #     text_features[i,:] = torch.mean(text_features_tmp[4*i:4*i+4,:], dim=0)
-    #  #   text_features[i,:] = text_features_tmp[(4*i),:]
-
 
     # score prediction
-    novel_class_correct = 0
-    novel_class_total = 475
     base_class_correct = 0
-    base_class_total = 1496
+    base_class_total = 0
 
-    for j, data in tqdm(enumerate(testloader, 0)):
-        points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
-        points, target = points.to(device), target.to(device)
-
-        features_2D = torch.zeros((points.shape[0], 512), device=device)
+    for j, data in tqdm(enumerate(test_dataset, 0)):
+        points, target = data
+        # convert numpy.int32 to torch.int32
+        target = torch.from_numpy(np.array(target)).to(device)
+        points = torch.from_numpy(points).to(device)
+        features_2D = torch.zeros((1, 512), device=device)
         with torch.no_grad():
-            for i in range(points.shape[0]):
                 # Project samples to an image
-                pc_prj = proj.get_img(points[i,:,:].unsqueeze(0))
+                pc_prj = proj.get_img(points.unsqueeze(0))
                 pc_img = torch.nn.functional.interpolate(pc_prj, size=(224, 224), mode='bilinear', align_corners=True)
                 pc_img = pc_img.to(device)
+               # print(pc_img.shape)
+                
+               # pc_img = preprocess(pc_img)
                 # Forward samples to the CLIP model
                 pc_img = clip_model.encode_image(pc_img).to(device)
                 # Average the features
                 pc_img_avg = torch.mean(pc_img, dim=0)
                 # Save feature vectors
-                features_2D[i,:] = pc_img_avg
+                features_2D = pc_img_avg
 
-   
-        features = features_2D
-        pred = clip_similarity(features_2D, text_features)
-        pred_choice = pred.data.max(1)[1]
+        
+        img_features = features_2D
+        pred = clip_similarity(img_features, text_features)
+        # argmax
+        pred_choice = torch.argmax(pred)
+        print('pred_choice:', pred_choice)
+        print('target:', target)
+        base_class_total = base_class_total + 1
         if pred_choice == target:
-            if target < 26:
-                base_class_correct = base_class_correct + 1
-            else:
-                novel_class_correct = novel_class_correct + 1
+            base_class_correct = base_class_correct + 1
+           
+        
+        print('base_class_correct:', base_class_correct/float(base_class_total))
+        print('--------------------------------------')
+        #print('novel_class_correct:', novel_class_correct)
 
 
     # accuarcy for in-distribution
@@ -146,6 +148,15 @@ if __name__ == "__main__":
     parser.add_argument('--nclasses', type=str, default= '26', help="number of classes")
     parser.add_argument('--task', type=str, default= '0', help="task number")
     parser.add_argument('--num_samples', type=str, default= '0', help="number of samples per class")
+    parser.add_argument('--process_data', action='store_true', default=False, help='save data offline')
+    parser.add_argument('--num_point', type=int, default=1024, help='Point Number')
+    parser.add_argument('--use_uniform_sample', action='store_true', default=False, help='use uniform sampiling')
+    parser.add_argument('--use_normals', action='store_true', default=False, help='use normals')
+    parser.add_argument('--num_category', default=40, type=int, choices=[10, 40],  help='training on ModelNet10/40')
+
+
+
+
 
 
     opt = parser.parse_args()

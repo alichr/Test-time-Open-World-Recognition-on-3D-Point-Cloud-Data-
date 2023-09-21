@@ -1,0 +1,40 @@
+an airplane
+a bathtub
+a bed
+a bench
+a bookshelf
+a bottle
+a bowl
+a car
+a chair
+a cone
+a cup
+a curtain
+a desk
+a door
+a dresser
+a flower pot
+a glass box
+a guitar
+a keyboard
+a lamp
+a laptop
+a mantel
+a monitor
+a night stand
+a person
+a piano
+a plant
+a radio
+a range hood
+a sink
+a sofa
+a stairs
+a stool
+a table
+a tent
+a toilet
+a tv stand
+a vase
+a wardrobe
+a xbox

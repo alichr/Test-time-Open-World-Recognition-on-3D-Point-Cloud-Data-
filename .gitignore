@@ -2,3 +2,5 @@ dataset/modelnet_scanobjectnn/
 cls/
 subspace/
 dataset/MiniImageNet/
+dataset/ModelNet40/
+dataset/ModelNet40_normal_resampled/
