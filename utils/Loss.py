@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
 
 # Define the combined constraint loss
 class CombinedConstraintLoss(nn.Module):
@@ -37,3 +39,29 @@ class CombinedConstraintLoss(nn.Module):
                 total_loss += self.ortho_weight * ortho_loss
 
         return total_loss
+
+# clip model loss  
+class ClipLoss(nn.Module):
+    def __init__(self, device, t : float = 0.1):
+        super(ClipLoss, self).__init__()
+        self.device = device
+        self.t = nn.Parameter(torch.ones([])* np.log(1/t)).exp().to(device)
+        self.loss = nn.CrossEntropyLoss()
+
+    def forward(self, feature_embeddings, semantic_embeddings):
+        feature_embeddings = F.normalize(feature_embeddings)
+        semantic_embeddings = F.normalize(semantic_embeddings)
+
+        # scaled pairwise cosine similarities [n, n]
+        logits = feature_embeddings @ semantic_embeddings.t() * self.t
+
+        # symmetric loss function
+        batch_size = feature_embeddings.shape[0]
+        labels = torch.arange(batch_size).to(self.device)
+
+        loss_features = self.loss(input=logits, target=labels)
+        loss_semantics = self.loss(input=logits.T, target=labels)
+        loss = (loss_features + loss_semantics) / 2
+        # print("loss_it", loss_features, loss_semantics)
+
+        return loss

@@ -25,6 +25,6 @@ class Transformation(torch.nn.Module):
         x = self.dropout(x)
         x = self.fc3(x)
         x = self.bn3(x)
-        x = torch.tanh(x)
+        x = torch.sigmoid(x)
         x = x.view(-1, self.num_rotations, 3, 3)
         return x
