@@ -9,20 +9,14 @@ from utils.mv_utils_zs_ver_2 import Realistic_Projection_Learnable_new as Realis
 from model.PointNet import PointNetfeat, feature_transform_regularizer, STN3d
 from model.Transformation import Transformation
 from utils.dataloader_ModelNet40 import *
+from model.Relation import RelationNetwork
 import os
 import numpy as np
 from matplotlib import pyplot as plt
 from torch import nn
-from utils.Loss import ClipLoss, CombinedConstraintLoss, SupConLoss, SupervisedContrastiveLoss
+from utils.Loss import CombinedConstraintLoss
 from model.Unet import UNetPlusPlus
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-# define a function for mathcing feature_2D (512) to Matrix with size (512 * 1000) colomn-wise with cosine similarity
-def clip_similarity(image_features, text_features):
-    image_features_norm = image_features / image_features.norm(dim=-1, keepdim=True) 
-    text_features_norm = text_features / text_features.norm(dim=-1, keepdim=True) 
-    text_probs = (100 * image_features_norm @ text_features_norm.T).softmax(dim=-1)
-    return text_probs
 
 
 def set_random_seed(seed):
@@ -47,7 +41,7 @@ def accuracy(output, target, topk=(1,)):
 # define the main function
 def main(opt):
 
-    num_rotations = 2
+    num_rotations = 1
     set_random_seed(opt.manualSeed) 
     # deine data loader
     train_dataset = ModelNetDataLoader(root='dataset/modelnet40_normal_resampled/', args=opt, split='train', process_data=opt.process_data)
@@ -63,18 +57,13 @@ def main(opt):
 
     # Step 2: Load Realistic Projection object
     proj = Realistic_Projection().to(device)
-    
-
     # Step 3: Load the Transformation model
-    transform_1 = STN3d()
-    transform_1.to(device)
+    transform = STN3d()
+    transform = transform.to(device)
+    # Step 4: Load the Relation Network
+    relation = RelationNetwork(1024, 2048, 1024)
+    relation = relation.to(device)
     
-    transform_2 = STN3d()
-    transform_2.to(device)
-   
-    transform_1.train()
-    transform_2.train()
-    clip_model.train()
     #load the text features
     prompts = read_txt_file("class_name_modelnet40.txt")
     text = open_clip.tokenize(prompts)
@@ -82,16 +71,17 @@ def main(opt):
     text_embedding_all_classes = clip_model.encode_text(text.to(device))
 
     # define the optimizer
-    optimizer = optim.Adam(list(transform_1.parameters()) + list(transform_2.parameters()), lr=0.001, betas=(0.9, 0.999))
+    optimizer = optim.Adam(list(transform.parameters()) + list(relation.parameters()), lr=0.001, betas=(0.9, 0.999))
 
     # load loss function
-    mse_loss = nn.MSELoss()
-    clip_loss = ClipLoss(device)
-    Sup_contrastive_loss = SupervisedContrastiveLoss()
+    cross_entrpy = nn.BCELoss()
     constraint_loss = CombinedConstraintLoss(num_rotations=num_rotations)
-    loss_orthogonal_weight = 0.01
+    loss_orthogonal_weight = 0.1
 
     # train the model
+    clip_model.train()
+    transform.train()
+    relation.train()
     print("=> Start training the model")
     for epoch in range(opt.nepoch):
         # define the loss
@@ -107,73 +97,55 @@ def main(opt):
             optimizer.zero_grad()
             points = points.transpose(2, 1)
             
-            trans_1 = transform_1(points)
-            
-            trans_2 = transform_2(points)
-            
-            loss_orthogonal = constraint_loss(torch.cat((trans_1.unsqueeze(1),trans_2.unsqueeze(1)),dim=1))
-           # print(trans_1[0])
-          #  print(trans_2[0])
-            
+            trans = transform(points)
+                        
+            loss_orthogonal = constraint_loss(trans.unsqueeze(1))
+
             # Project samples to an image surface to generate 3 depth maps
-            depth_map = torch.zeros((points.shape[0] * num_rotations, 3, 110, 110)).to(device)
             points = points.transpose(2, 1)   
-            depth_map[0:points.shape[0]] = proj.get_img(points, trans_1.view(-1, 9))    
-            depth_map[points.shape[0]:] = proj.get_img(points, trans_2.view(-1, 9))  
+            depth_map = proj.get_img(points, trans.view(-1, 9))    
             depth_map = torch.nn.functional.interpolate(depth_map, size=(224, 224), mode='bilinear', align_corners=True)
-            
-           
-            # Forward samples to the CLIP model
+        
+            # Forward samples to the vision CLIP model
             img_embedding = clip_model.encode_image(depth_map).to(device)
 
-            # text embedding
-            text_embedding = text_embedding_all_classes[target.long()]
+            # Forward samples to the text CLIP model
+            text_embedding = text_embedding_all_classes.to(device)
             
-            #img_embedding = F.normalize(img_embedding)
-           # text_embedding = F.normalize(text_embedding)
-            #logits = clip_similarity(img_embedding.float(), text_embedding_all_classes.float())
-            # Calculating the Loss
+            # forwarding samples to the Relation module
+            text_embedding = text_embedding.unsqueeze(0).repeat(opt.batch_size,1,1).to(device)
+            img_embedding = img_embedding.unsqueeze(0).repeat(opt.num_category,1,1)
+            img_embedding = torch.transpose(img_embedding,0,1).to(device)
+            relation_pairs = torch.cat((text_embedding.float(),img_embedding.float()),2).view(-1,1024)
+            relations = relation(relation_pairs.float()).view(-1, opt.num_category).to(device)
+
+            # cllculate the loss
+            one_hot_labels = (torch.zeros(opt.batch_size, opt.num_category).to(device).scatter_(1, target.long().view(-1,1), 1))
+    
+            loss_t = cross_entrpy(relations, one_hot_labels)
+            loss = loss_t + loss_orthogonal * loss_orthogonal_weight
+           # print('loss',loss)
+            loss.backward(retain_graph=True)
             
-            loss = 0
-            img_embedding_avg = 0
-            for s in range(num_rotations):
-                img_embedding_avg += img_embedding[s * points.shape[0]:(s + 1) * points.shape[0], :]/num_rotations
-                
-            labels = target.type(torch.LongTensor)  
-            loss = Sup_contrastive_loss(img_embedding_avg.float(), text_embedding.float(), labels.to(device))
-            print(loss)
-            stop
-            loss += torch.mean(1 - F.cosine_similarity(text_embedding.float(), img_embedding_avg.float()))
-            #loss += mse_loss(text_embedding.float(), img_embedding_avg.float())
-           # for s in range(num_rotations):
-                #loss += clip_loss(img_embedding[s * points.shape[0]:(s + 1) * points.shape[0]].float(), text_embedding.float())
-                #loss += torch.mean(1 - F.cosine_similarity(img_embedding[s * points.shape[0]:(s + 1) * points.shape[0]].float(), img_embedding_avg.float()))
-                #loss += mse_loss(img_embedding[s * points.shape[0]:(s + 1) * points.shape[0]].float(), img_embedding_avg.float())
-            loss_t = loss + loss_orthogonal_weight*loss_orthogonal
-            loss_t.backward(retain_graph=True)
             optimizer.step()
 
             # Calculating the accuracy
-            train_loss += loss_t.clone().detach().item()
+            train_loss += loss.clone().detach().item()
 
-            
-            logits = clip_similarity(img_embedding_avg.float(), text_embedding_all_classes.float())
-            #logits = torch.cat([logits[:48,:],logits[48:,:]],dim=1)
-            
-            _, predicted = torch.max(logits.data, 1)
-            
-           # for kk in range(16):
-             #   if predicted[kk] > 40:
-              #     predicted[kk] = predicted[kk] - 40      
-            train_total += target.size(0)
-            train_correct += (predicted == target).sum().item()
+            # calculate the accuracy
+            prediction = relations.cpu().detach().numpy()
+            prediction = np.argmax(prediction, axis=1)
+            target = target.cpu().detach().numpy()
+            train_total += target.shape[0]
+            train_correct += np.sum(prediction == target)
+
             # delete the variables to free the memory
-            del points, target, depth_map, img_embedding, text_embedding, loss, logits, predicted
+            del points, target, depth_map, img_embedding, text_embedding, loss
             torch.cuda.empty_cache()
-        print('With STN + Sigmoid +similarity','loss_orthogonal_weight:',loss_orthogonal_weight, 'number of view', num_rotations)    
+        print('Relation Module','loss_orthogonal_weight:',loss_orthogonal_weight, 'number of view', num_rotations)    
         print(f"=> Epoch {epoch} loss: {train_loss:.2f} accuracy: {100 * train_correct / train_total:.2f}")
-        torch.save(transform_1.state_dict(), '%s/transform_1_%d.pth' % (opt.outf, epoch))
-        torch.save(transform_2.state_dict(), '%s/transform_2_%d.pth' % (opt.outf, epoch))
+        torch.save(transform.state_dict(), '%s/transform_%d.pth' % (opt.outf, epoch))
+        torch.save(relation.state_dict(), '%s/relation_%d.pth' % (opt.outf, epoch))
 
 
         # evaluate the model       
@@ -182,8 +154,8 @@ def main(opt):
         Logits = torch.zeros(2468,40).to(device)
         Target = torch.zeros(2468).to(device)
 
-        transform_1.eval()
-        transform_2.eval()
+        transform.eval()
+        relation.eval() 
         clip_model.eval()
 
         for j, data in tqdm(enumerate(testDataLoader, 0)):
@@ -197,45 +169,58 @@ def main(opt):
                     # Forward samples to the PointNet model
                     points = points.transpose(2, 1)
                     points = points.repeat(2, 1, 1)     
-                    trans_1 = transform_1(points)
-                    trans_2 = transform_2(points)
+                    trans = transform(points)
          
                     points = points.transpose(2, 1)   
 
-                    depth_map = torch.zeros((points.shape[0] * num_rotations, 3, 110, 110)).to(device)
-                    depth_map[0:points.shape[0]] = proj.get_img(points, trans_1.view(-1, 9))    
-                    depth_map[points.shape[0]:] = proj.get_img(points, trans_2.view(-1, 9))  
+                    depth_map = proj.get_img(points, trans.view(-1, 9))    
                     depth_map = torch.nn.functional.interpolate(depth_map, size=(224, 224), mode='bilinear', align_corners=True)
                    
-                    
                     # Forward samples to the CLIP model
-                    pc_img = clip_model.encode_image(depth_map).to(device)
-                    # Average the features
-                    pc_img_avg = torch.mean(pc_img, dim=0)
-                    # Save feature vectors
-                    img_embedding = pc_img_avg.unsqueeze(0)
+                    img_embedding = clip_model.encode_image(depth_map).to(device)
+                    img_embedding = img_embedding
+                    
+                    img_embedding = img_embedding[0,:].unsqueeze(0)
+
+                    # Forward samples to the text CLIP model
+                    text_embedding = text_embedding_all_classes.to(device)
+                    
+                    
+                    text_embedding = text_embedding.unsqueeze(0).repeat(1,1,1).to(device)
+                    
+
+                    img_embedding = img_embedding.unsqueeze(0).repeat(opt.num_category,1,1).to(device)
+                    img_embedding = torch.transpose(img_embedding,0,1).to(device)
+                    relation_pairs = torch.cat((text_embedding.float(),img_embedding.float()),2).view(-1,1024)
+                    relations = relation(relation_pairs.float()).view(-1, opt.num_category).to(device)
+                   
+                     
+            prediction = relations.cpu().detach().numpy()
+            prediction = np.argmax(prediction, axis=1)
+            if prediction == target.cpu().detach().numpy():
+               base_class_correct += 1
             
-            logits = clip_similarity(img_embedding.float(), text_embedding_all_classes.float())
-            
-          
-            
-            
+            #target = target.cpu().detach().numpy()
+           # base_class_total += target.shape[0]
+            #base_class_correct += np.sum(prediction == target)
+            logits = relations.cpu().detach()
+
             Logits[j] = logits
             Target[j] = target
 
-        acc, _ = accuracy(Logits, Target, topk=(1, 5))
-        acc = (acc / Target.shape[0]) * 100
+        acc = (base_class_correct / 2468) * 100
         print(f"=> zero-shot accuracy: {acc:.2f}")
+        print('-------------------------------------------------------------------------')
         # put the models in the training mode
 
-        transform_1.train()
-        transform_2.train()
+        transform.train()
+        relation.train()
         clip_model.train()
  
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch_size', type=int, default= 16, help='input batch size')
+    parser.add_argument('--batch_size', type=int, default= 32, help='input batch size')
     parser.add_argument('--num_points', type=int, default=2048, help='number of points in each input point cloud')
     parser.add_argument('--workers', type=int, help='number of data loading workers', default=4)
     parser.add_argument('--nepoch', type=int, default=250, help='number of epochs to train for')

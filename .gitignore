@@ -4,3 +4,4 @@ subspace/
 dataset/MiniImageNet/
 dataset/ModelNet40/
 dataset/ModelNet40_normal_resampled/
+dataset/ScanObjectNN/
