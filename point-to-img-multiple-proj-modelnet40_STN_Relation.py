@@ -61,7 +61,7 @@ def main(opt):
     transform = STN3d()
     transform = transform.to(device)
     # Step 4: Load the Relation Network
-    rrelation = RelationNetwork(1024, 512, 256)
+    relation = RelationNetwork(1024, 512, 256)
     relation = relation.to(device)
     
     #load the text features
@@ -99,7 +99,7 @@ def main(opt):
             
             trans = transform(points)
                         
-            loss_orthogonal = constraint_loss(trans.unsqueeze(1))
+            loss_orthogonal = constraint_loss(trans.unsqueeze(1)).mean()
 
             # Project samples to an image surface to generate 3 depth maps
             points = points.transpose(2, 1)   
