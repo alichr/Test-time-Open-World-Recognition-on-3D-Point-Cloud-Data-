@@ -33,6 +33,11 @@ def read_txt_file(file):
     array = list(filter(None, array))
     return array
 
+def accuracy(output, target, topk=(1,)):
+    pred = output.topk(max(topk), 1, True, True)[1].t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred))
+    return [float(correct[:k].reshape(-1).float().sum(0, keepdim=True).cpu().numpy()) for k in topk]
+
 # define the main function
 def main(opt):
 
@@ -56,7 +61,7 @@ def main(opt):
     transform = STN3d()
     transform = transform.to(device)
     # Step 4: Load the Relation Network
-    relation = RelationNetwork(1024, 2048, 1024)
+    relation = RelationNetwork(1024, 512, 256)
     relation = relation.to(device)
     
     #load the text features

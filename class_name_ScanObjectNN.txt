@@ -1,0 +1,15 @@
+a bag
+a bed
+a bin
+a box
+a cabinet
+a chair
+a desk
+a display
+a door
+a pillow
+a shelf
+a sink
+a sofa
+a table
+a toilet

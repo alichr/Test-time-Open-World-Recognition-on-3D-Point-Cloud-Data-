@@ -61,7 +61,7 @@ def main(opt):
     transform = STN3d()
     transform = transform.to(device)
     # Step 4: Load the Relation Network
-    relation = RelationNetwork(1024, 2048, 1024)
+    rrelation = RelationNetwork(1024, 512, 256)
     relation = relation.to(device)
     
     #load the text features
