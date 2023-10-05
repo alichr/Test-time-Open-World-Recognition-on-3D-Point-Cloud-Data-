@@ -16,6 +16,7 @@ from matplotlib import pyplot as plt
 from torch import nn
 from utils.Loss import CombinedConstraintLoss
 from model.Unet import UNetPlusPlus
+from torchmetrics.functional.image import image_gradients
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
@@ -41,7 +42,7 @@ def accuracy(output, target, topk=(1,)):
 # define the main function
 def main(opt):
 
-    num_rotations = 2
+    num_rotations = 1
     set_random_seed(opt.manualSeed) 
     # deine data loader
     train_dataset = ModelNetDataLoader(root='dataset/modelnet40_normal_resampled/', args=opt, split='train', process_data=opt.process_data)
@@ -58,11 +59,11 @@ def main(opt):
     # Step 2: Load Realistic Projection object
     proj = Realistic_Projection().to(device)
     # Step 3: Load the Transformation model
-    # define muliple transformations based on STN3d
-    transform = {str(i): STN3d() for i in range(num_rotations)}
-    for i in range(num_rotations):
-        transform[str(i)].to(device)
+    transform = STN3d()
+    transform = transform.to(device)
 
+    # load the Unet model
+    unet = UNetPlusPlus().to(device)
     # Step 4: Load the Relation Network
     relation = RelationNetwork(1024, 512, 256)
     relation = relation.to(device)
@@ -72,21 +73,20 @@ def main(opt):
     text = open_clip.tokenize(prompts)
     #with torch.no_grad(), torch.cuda.amp.autocast():
     text_embedding_all_classes = clip_model.encode_text(text.to(device))
-    
 
     # define the optimizer
-    Parameters = [p for model in transform.values() for p in model.parameters()]
-    optimizer = optim.Adam(list(relation.parameters()) + Parameters, lr=0.001, betas=(0.9, 0.999), weight_decay=0.0001)
+    optimizer = optim.Adam(list(transform.parameters()) + list(relation.parameters())  + list(unet.parameters()), lr=0.001, betas=(0.9, 0.999))
 
     # load loss function
     cross_entrpy = nn.BCELoss()
     constraint_loss = CombinedConstraintLoss(num_rotations=num_rotations)
     loss_orthogonal_weight = 0.1
+    mse_loss = nn.MSELoss()
 
     # train the model
     clip_model.train()
-    for i in range(num_rotations):
-        transform[format(i)].train()
+    transform.train()
+    unet.train()
     relation.train()
     print("=> Start training the model")
     for epoch in range(opt.nepoch):
@@ -95,33 +95,35 @@ def main(opt):
         train_correct = 0
         train_total = 0
        
+
         for i, data in tqdm(enumerate(trainDataLoader, 0)):
             points, target = data
             # convert numpy.int32 to torch.int32
             points, target = points.to(device), target.to(device)
             optimizer.zero_grad()
             points = points.transpose(2, 1)
+            
+            trans = transform(points)
+                        
+            loss_orthogonal = constraint_loss(trans.unsqueeze(1)).mean()
 
-            # foewad samples to multiple transformation models
-            trans = torch.zeros((points.shape[0], num_rotations, 3, 3), device=device)
-            for jj in range(num_rotations):
-                trans[:, jj, :, :] = transform[format(jj)](points)
-            loss_orthogonal = constraint_loss(trans).mean()
-           
             # Project samples to an image surface to generate 3 depth maps
-            points = points.transpose(2, 1) 
-            depth_map = torch.zeros((points.shape[0] * num_rotations, 3, 224, 224)).to(device)  
-            for jj in range(num_rotations):
-                depth_map_tmp = proj.get_img(points, trans[:,jj,:,:].view(-1, 9))    
-                depth_map_tmp = torch.nn.functional.interpolate(depth_map_tmp, size=(224, 224), mode='bilinear', align_corners=True)
-                depth_map[jj * points.shape[0]:(jj + 1) * points.shape[0], :, :, :] = depth_map_tmp
+            points = points.transpose(2, 1)   
+            depth_map = proj.get_img(points, trans.view(-1, 9))    
+            depth_map = torch.nn.functional.interpolate(depth_map, size=(224, 224), mode='bilinear', align_corners=True)
             
+
+            # reverse the depth map and extract the mask
+            depth_map_reverse = 1 - depth_map
+            mask = (depth_map_reverse != 0).float()
+            RGB_map = unet(depth_map)
+            RGB_map = RGB_map * mask
+            dy, dx = image_gradients(RGB_map)
+            # loss for gradient
+            loss_gradient = mse_loss(dy, torch.zeros_like(dy)) + mse_loss(dx, torch.zeros_like(dx))
             # Forward samples to the vision CLIP model
-            img_embedding_tmp = clip_model.encode_image(depth_map).to(device)
-            img_embedding = 0
-            for jj in range(num_rotations):
-                img_embedding += img_embedding_tmp[jj * points.shape[0]:(jj + 1) * points.shape[0], :]/ num_rotations
-            
+            img_embedding = clip_model.encode_image(RGB_map).to(device)
+
             # Forward samples to the text CLIP model
             text_embedding = text_embedding_all_classes.to(device)
             
@@ -134,14 +136,20 @@ def main(opt):
 
             # cllculate the loss
             one_hot_labels = (torch.zeros(opt.batch_size, opt.num_category).to(device).scatter_(1, target.long().view(-1,1), 1))
+    
             loss_t = cross_entrpy(relations, one_hot_labels)
-            loss = loss_t + loss_orthogonal * loss_orthogonal_weight
-          
+            loss = loss_t + loss_orthogonal * loss_orthogonal_weight + loss_gradient
+            print(loss_gradient)
+
+           # print('loss',loss)
             loss.backward(retain_graph=True)
+            
             optimizer.step()
 
-            # calculate the accuracy
+            # Calculating the accuracy
             train_loss += loss.clone().detach().item()
+
+            # calculate the accuracy
             prediction = relations.cpu().detach().numpy()
             prediction = np.argmax(prediction, axis=1)
             target = target.cpu().detach().numpy()
@@ -163,45 +171,43 @@ def main(opt):
         Logits = torch.zeros(2468,40).to(device)
         Target = torch.zeros(2468).to(device)
 
-        for i in range(num_rotations):
-            transform[format(i)].eval()
+        transform.eval()
         relation.eval() 
+        unet.eval()
         clip_model.eval()
 
         for j, data in tqdm(enumerate(testDataLoader, 0)):
             points, target = data
             # convert numpy.int32 to torch.int32
             points, target = points.to(device), target.to(device)
+            features_2D = torch.zeros((1, 512), device=device)
             with torch.no_grad():
                     
+                    depth_map = torch.zeros((points.shape[0] * num_rotations, 3, 110, 110)).to(device)
                     # Forward samples to the PointNet model
                     points = points.transpose(2, 1)
-                    points = points.repeat(2, 1, 1)  
+                    points = points.repeat(2, 1, 1)     
+                    trans = transform(points)
+         
+                    points = points.transpose(2, 1)   
 
-                      # foewad samples to multiple transformation models
-                    trans = torch.zeros((points.shape[0], num_rotations, 3, 3), device=device)
-                    print(trans.shape)
-                    for jj in range(num_rotations):
-                        trans[:, jj, :, :] = transform[format(jj)](points)
+                    depth_map = proj.get_img(points, trans.view(-1, 9))    
+                    depth_map = torch.nn.functional.interpolate(depth_map, size=(224, 224), mode='bilinear', align_corners=True)
 
-                    points = points.transpose(2, 1)  
-
-                    depth_map = torch.zeros((points.shape[0] * num_rotations, 3, 224, 224)).to(device)  
-                    for jj in range(num_rotations):
-                        depth_map_tmp = proj.get_img(points, trans[:,jj,:,:].view(-1, 9))    
-                        depth_map_tmp = torch.nn.functional.interpolate(depth_map_tmp, size=(224, 224), mode='bilinear', align_corners=True)
-                        depth_map[jj * points.shape[0]:(jj + 1) * points.shape[0], :, :, :] = depth_map_tmp 
+                    depth_map_reverse = 1 - depth_map
+                    mask = (depth_map_reverse != 0).float()
+                    RGB_map = unet(depth_map)
+                    RGB_map = RGB_map * mask
                    
                     # Forward samples to the CLIP model
-                    img_embedding_tmp = clip_model.encode_image(depth_map).to(device)
-                    img_embedding = 0
-                    for jj in range(num_rotations):
-                        img_embedding += img_embedding_tmp[jj * points.shape[0]:(jj + 1) * points.shape[0], :]/ num_rotations
-                    print(img_embedding.shape)
+                    img_embedding = clip_model.encode_image(RGB_map).to(device)
+                    img_embedding = img_embedding
+                    
                     img_embedding = img_embedding[0,:].unsqueeze(0)
 
                     # Forward samples to the text CLIP model
                     text_embedding = text_embedding_all_classes.to(device)
+                    
                     
                     text_embedding = text_embedding.unsqueeze(0).repeat(1,1,1).to(device)
                     
@@ -230,15 +236,15 @@ def main(opt):
         print('-------------------------------------------------------------------------')
         # put the models in the training mode
 
-        for i in range(num_rotations):
-            transform[format(i)].train()
+        transform.train()
         relation.train()
+        unet.train()
         clip_model.train()
  
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch_size', type=int, default= 32, help='input batch size')
+    parser.add_argument('--batch_size', type=int, default= 16, help='input batch size')
     parser.add_argument('--num_points', type=int, default=2048, help='number of points in each input point cloud')
     parser.add_argument('--workers', type=int, help='number of data loading workers', default=4)
     parser.add_argument('--nepoch', type=int, default=250, help='number of epochs to train for')
