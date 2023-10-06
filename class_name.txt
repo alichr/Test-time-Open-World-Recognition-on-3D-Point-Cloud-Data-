@@ -1,43 +1,40 @@
-an airplane
-a bathtub
-a bottle
-a bowl
-a car
-a cone
-a cup
-a curtain
-a flower pot
-a glass box
-a guitar
-a keyboard
-a lamp
-a laptop
-a mantel
-a night stand
-a person
-a piano
-a plant
-a radio
-a range hood
-a stairs
-a tent
-a tv stand
-a vase
-a xbox
-a cabinet
-a chair
-a desk
-a display
-a door
-a shelf
-a table
-a bed
-a sink
-a sofa
-a toilet
-
-
-
-
-
-
+airplane
+bathtub
+bed
+bench
+bookshelf
+bottle
+bowl
+car
+chair
+cone
+cup
+curtain
+desk
+door
+dresser
+flower_pot
+glass_box
+guitar
+keyboard
+lamp
+laptop
+mantel
+monitor
+night_stand
+person
+piano
+plant
+radio
+range_hood
+sink
+sofa
+stairs
+stool
+table
+tent
+toilet
+tv_stand
+vase
+wardrobe
+xbox

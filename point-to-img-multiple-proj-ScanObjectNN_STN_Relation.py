@@ -5,7 +5,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 from tqdm import tqdm
 import open_clip
-from utils.mv_utils_zs_ver_2 import Realistic_Projection_Learnable_new as Realistic_Projection 
+from utils.mv_utils_zs import Realistic_Projection
+#from utils.mv_utils_zs_ver_2 import Realistic_Projection_Learnable_new as Realistic_Projection 
 from model.PointNet import PointNetfeat, feature_transform_regularizer, STN3d
 from model.Transformation import Transformation
 from utils.dataloader_ModelNet40 import *
@@ -17,6 +18,8 @@ from matplotlib import pyplot as plt
 from torch import nn
 from utils.Loss import CombinedConstraintLoss
 from model.Unet import UNetPlusPlus
+from PIL import Image
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
@@ -30,7 +33,7 @@ def set_random_seed(seed):
 def read_txt_file(file):
     with open(file, 'r') as f:
         array = f.readlines()
-    array = ["An image of " + x.strip() for x in array]
+    array = ["A depth map of a " + x.strip() for x in array]
    # array = [x.strip() for x in array]
     array = list(filter(None, array))
     return array
@@ -43,9 +46,14 @@ def main(opt):
     # deine data loader
 
     trainDataLoader = torch.utils.data.DataLoader(ScanObjectNN(partition='training', num_points=opt.num_points), num_workers=opt.workers,
-                              batch_size=opt.batch_size, shuffle=True, drop_last=True)
+                            batch_size=opt.batch_size, shuffle=True, drop_last=True)
     testDataLoader = torch.utils.data.DataLoader(ScanObjectNN(partition='test', num_points=opt.num_points), num_workers=opt.workers,
-                             batch_size=opt.batch_size, shuffle=False, drop_last=False)
+                            batch_size=opt.batch_size, shuffle=False, drop_last=False)
+    
+   # train_dataset = ModelNetDataLoader(root='dataset/modelnet40_normal_resampled/', args=opt, split='train', process_data=opt.process_data)
+    #test_dataset = ModelNetDataLoader(root='dataset/modelnet40_normal_resampled/', args=opt, split='test', process_data=opt.process_data)
+   # trainDataLoader = torch.utils.data.DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True, num_workers=10, drop_last=True)
+   # testDataLoader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=10)
     
 
     # Step 1: Load CLIP model
@@ -55,30 +63,26 @@ def main(opt):
         param.requires_grad = False
 
     # Step 2: Load Realistic Projection object
-    proj = Realistic_Projection().to(device)
+    proj = Realistic_Projection()
     # Step 3: Load the Transformation model
     transform = STN3d()
     # load the pre-trained model from a cpu
-    transform.load_state_dict(torch.load('cls/transform_8.pth',map_location='cpu'))
+    transform.load_state_dict(torch.load('cls/transform_67.pth',map_location='cpu'))
     transform = transform.to(device)
     # Step 4: Load the Relation Network
     relation = RelationNetwork(1024, 512, 256)
-    relation.load_state_dict(torch.load('cls/relation_8.pth',map_location='cpu'))
+    relation.load_state_dict(torch.load('cls/relation_67.pth',map_location='cpu'))
     relation = relation.to(device)
     
     #load the text features
     prompts = read_txt_file("class_name_ScanObjectNN.txt")
+    #prompts = read_txt_file("class_name_modelnet40.txt")
     text = open_clip.tokenize(prompts)
     #with torch.no_grad(), torch.cuda.amp.autocast():
     text_embedding_all_classes = clip_model.encode_text(text.to(device))
 
     # define the optimizer
-    optimizer = optim.Adam(list(transform.parameters()) + list(relation.parameters()), lr=0.001, betas=(0.9, 0.999))
-
-    # load loss function
-    cross_entrpy = nn.BCELoss()
-    constraint_loss = CombinedConstraintLoss(num_rotations=num_rotations)
-    loss_orthogonal_weight = 0.1
+   
 
    
     # evaluate the model       
@@ -106,12 +110,19 @@ def main(opt):
         
                 points = points.transpose(2, 1)   
 
-                depth_map = proj.get_img(points, trans.view(-1, 9))    
+                #depth_map = proj.get_img(points, trans.view(-1, 9))  
+                depth_map = proj.get_img(points)   
                 depth_map = torch.nn.functional.interpolate(depth_map, size=(224, 224), mode='bilinear', align_corners=True)
-                
+
+                 # save img
+            
+                img = depth_map[5,:,:,:].squeeze(0).permute(1,2,0).detach().cpu().numpy()
+                img = (img * 255).astype(np.uint8)
+                img = Image.fromarray(img)
+                img.save('3D-to-2D-proj/tmp/' + str(target.item()) + '_' + str(j) +  '.png')
+                continue
                 # Forward samples to the CLIP model
                 img_embedding = clip_model.encode_image(depth_map).to(device)
-                img_embedding = img_embedding
                 
                 img_embedding = img_embedding[0,:].unsqueeze(0)
 
@@ -129,8 +140,6 @@ def main(opt):
                 
                     
         prediction = relations.cpu().detach().numpy()
-        predict = np.argsort(prediction, axis=1)
-        print('target:', target.cpu().detach().numpy(), 'prediction', predict)
 
         prediction = np.argmax(prediction, axis=1)
        
@@ -147,7 +156,7 @@ def main(opt):
         Logits[j] = logits
         Target[j] = target
 
-    acc = (base_class_correct / 581) * 100
+    acc = (base_class_correct / 2468) * 100
     print(f"=> zero-shot accuracy: {acc:.2f}")
     print('-------------------------------------------------------------------------')
     # put the models in the training mode
@@ -165,7 +174,6 @@ if __name__ == "__main__":
     parser.add_argument('--manualSeed', type=int, default = 42, help='random seed')
     parser.add_argument('--dataset_path', type=str, default= 'dataset/modelnet_scanobjectnn/', help="dataset path")
     parser.add_argument('--ntasks', type=str, default= '1', help="number of tasks")
-    parser.add_argument('--nclasses', type=str, default= '26', help="number of classes")
     parser.add_argument('--task', type=str, default= '0', help="task number")
     parser.add_argument('--num_samples', type=str, default= '0', help="number of samples per class")
     parser.add_argument('--process_data', action='store_true', default=False, help='save data offline')
