@@ -16,7 +16,8 @@ from matplotlib import pyplot as plt
 from torch import nn
 from utils.Loss import CombinedConstraintLoss
 from model.Unet import UNetPlusPlus
-from torchmetrics.functional.image import image_gradients
+import json
+from utils.augmentation import Augmentation
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
@@ -30,7 +31,14 @@ def set_random_seed(seed):
 def read_txt_file(file):
     with open(file, 'r') as f:
         array = f.readlines()
-    array = ["An image of " + x.strip() for x in array]
+    array = ["A depth map of " + x.strip() for x in array]
+    array = list(filter(None, array))
+    return array
+
+def read_txt_file_class_name(file):
+    with open(file, 'r') as f:
+        array = f.readlines()
+    array = [x.strip() for x in array]
     array = list(filter(None, array))
     return array
 
@@ -38,6 +46,15 @@ def accuracy(output, target, topk=(1,)):
     pred = output.topk(max(topk), 1, True, True)[1].t()
     correct = pred.eq(target.view(1, -1).expand_as(pred))
     return [float(correct[:k].reshape(-1).float().sum(0, keepdim=True).cpu().numpy()) for k in topk]
+
+# read json file
+def read_json_file(file):
+    with open(file, 'r') as f:
+        array = json.load(f)
+    return array
+
+
+
 
 # define the main function
 def main(opt):
@@ -50,6 +67,9 @@ def main(opt):
     trainDataLoader = torch.utils.data.DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True, num_workers=10, drop_last=True)
     testDataLoader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=10)
 
+    # define augmentation
+    augmentation = Augmentation()
+
     # Step 1: Load CLIP model
     clip_model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-16', pretrained='laion2b_s34b_b88k')
     clip_model.to(device)
@@ -61,32 +81,32 @@ def main(opt):
     # Step 3: Load the Transformation model
     transform = STN3d()
     transform = transform.to(device)
-
-    # load the Unet model
-    unet = UNetPlusPlus().to(device)
     # Step 4: Load the Relation Network
     relation = RelationNetwork(1024, 512, 256)
     relation = relation.to(device)
     
     #load the text features
-    prompts = read_txt_file("class_name_modelnet40.txt")
-    text = open_clip.tokenize(prompts)
+    
+    class_name = read_txt_file_class_name("class_name.txt")
+    class_name_prompt = read_txt_file("class_name_modelnet40.txt")
+    prompts = read_json_file("modelnet40_1000.json")
+   
+   # prompts = read_txt_file("class_name_modelnet40.txt")
+    #text = open_clip.tokenize(prompts)
     #with torch.no_grad(), torch.cuda.amp.autocast():
-    text_embedding_all_classes = clip_model.encode_text(text.to(device))
+    #text_embedding_all_classes = clip_model.encode_text(text.to(device))
 
     # define the optimizer
-    optimizer = optim.Adam(list(transform.parameters()) + list(relation.parameters())  + list(unet.parameters()), lr=0.001, betas=(0.9, 0.999))
+    optimizer = optim.Adam(list(transform.parameters()) + list(relation.parameters()), lr=0.001, betas=(0.9, 0.999))
 
     # load loss function
     cross_entrpy = nn.BCELoss()
     constraint_loss = CombinedConstraintLoss(num_rotations=num_rotations)
-    loss_orthogonal_weight = 0.1
-    mse_loss = nn.MSELoss()
+    loss_orthogonal_weight = 0.01
 
     # train the model
     clip_model.train()
     transform.train()
-    unet.train()
     relation.train()
     print("=> Start training the model")
     for epoch in range(opt.nepoch):
@@ -100,8 +120,12 @@ def main(opt):
             points, target = data
             # convert numpy.int32 to torch.int32
             points, target = points.to(device), target.to(device)
-            optimizer.zero_grad()
             points = points.transpose(2, 1)
+            points = augmentation.augment(points)
+
+            points = points.transpose(2, 1).float()
+            optimizer.zero_grad()
+
             
             trans = transform(points)
                         
@@ -110,20 +134,23 @@ def main(opt):
             # Project samples to an image surface to generate 3 depth maps
             points = points.transpose(2, 1)   
             depth_map = proj.get_img(points, trans.view(-1, 9))    
-            depth_map = torch.nn.functional.interpolate(depth_map, size=(224, 224), mode='bilinear', align_corners=True)    
-            
-            # unet model
-            RGB_map = unet(mask)
-            # loss for gradient
-            dy_init, dx_init = image_gradients(depth_map)
-            dy, dx = image_gradients(RGB_map)
-            loss_gradient = mse_loss(dy, dy_init) + mse_loss(dx, dx_init)
-
+            depth_map = torch.nn.functional.interpolate(depth_map, size=(224, 224), mode='bilinear', align_corners=True)
+        
             # Forward samples to the vision CLIP model
-            img_embedding = clip_model.encode_image(RGB_map).to(device)
+            img_embedding = clip_model.encode_image(depth_map).to(device)
 
+            # extract prompt from each batch
+            prompts_batch = []
+            for j in range(opt.num_category):
+                tmp_1 = (class_name[j])
+                tmp_2 = prompts[tmp_1]
+                random_idx = random.randint(0, len(tmp_2)-1)
+                prompts_batch.append(tmp_2[random_idx])
+    
             # Forward samples to the text CLIP model
-            text_embedding = text_embedding_all_classes.to(device)
+            text = open_clip.tokenize(prompts_batch)
+            text_embedding = clip_model.encode_text(text.to(device))
+
             
             # forwarding samples to the Relation module
             text_embedding = text_embedding.unsqueeze(0).repeat(opt.batch_size,1,1).to(device)
@@ -136,11 +163,9 @@ def main(opt):
             one_hot_labels = (torch.zeros(opt.batch_size, opt.num_category).to(device).scatter_(1, target.long().view(-1,1), 1))
     
             loss_t = cross_entrpy(relations, one_hot_labels)
-            loss = loss_t + loss_orthogonal * loss_orthogonal_weight + loss_gradient
-
+            loss = loss_t + loss_orthogonal * loss_orthogonal_weight
            # print('loss',loss)
             loss.backward(retain_graph=True)
-            loss_gradient.backward(retain_graph=True)
             
             optimizer.step()
 
@@ -171,8 +196,12 @@ def main(opt):
 
         transform.eval()
         relation.eval() 
-        unet.eval()
         clip_model.eval()
+
+         #load the text features
+        prompts = read_txt_file("class_name_modelnet40.txt")
+        text = open_clip.tokenize(prompts)
+        text_embedding_all_classes = clip_model.encode_text(text.to(device))
 
         for j, data in tqdm(enumerate(testDataLoader, 0)):
             points, target = data
@@ -191,11 +220,9 @@ def main(opt):
 
                     depth_map = proj.get_img(points, trans.view(-1, 9))    
                     depth_map = torch.nn.functional.interpolate(depth_map, size=(224, 224), mode='bilinear', align_corners=True)
-                    
-                    RGB_map = unet(depth_map)
                    
                     # Forward samples to the CLIP model
-                    img_embedding = clip_model.encode_image(RGB_map).to(device)
+                    img_embedding = clip_model.encode_image(depth_map).to(device)
                     img_embedding = img_embedding
                     
                     img_embedding = img_embedding[0,:].unsqueeze(0)
@@ -233,13 +260,12 @@ def main(opt):
 
         transform.train()
         relation.train()
-        unet.train()
         clip_model.train()
  
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch_size', type=int, default= 16, help='input batch size')
+    parser.add_argument('--batch_size', type=int, default= 32, help='input batch size')
     parser.add_argument('--num_points', type=int, default=2048, help='number of points in each input point cloud')
     parser.add_argument('--workers', type=int, help='number of data loading workers', default=4)
     parser.add_argument('--nepoch', type=int, default=250, help='number of epochs to train for')
