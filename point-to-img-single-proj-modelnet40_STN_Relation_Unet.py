@@ -80,7 +80,7 @@ def main(opt):
     # load loss function
     cross_entrpy = nn.BCELoss()
     constraint_loss = CombinedConstraintLoss(num_rotations=num_rotations)
-    loss_orthogonal_weight = 0.1
+    loss_orthogonal_weight = 0.01
     mse_loss = nn.MSELoss()
 
     # train the model
@@ -113,11 +113,15 @@ def main(opt):
             depth_map = torch.nn.functional.interpolate(depth_map, size=(224, 224), mode='bilinear', align_corners=True)    
             
             # unet model
-            RGB_map = unet(mask)
+            depth_map_reverse = 1 - depth_map
+            mask = (depth_map_reverse != 0).float()
+            texture_map = unet(mask)
             # loss for gradient
-            dy_init, dx_init = image_gradients(depth_map)
-            dy, dx = image_gradients(RGB_map)
+            dy_init, dx_init = image_gradients(mask)
+            dy, dx = image_gradients(texture_map)
             loss_gradient = mse_loss(dy, dy_init) + mse_loss(dx, dx_init)
+
+            RGB_map = depth_map * texture_map
 
             # Forward samples to the vision CLIP model
             img_embedding = clip_model.encode_image(RGB_map).to(device)
@@ -140,7 +144,6 @@ def main(opt):
 
            # print('loss',loss)
             loss.backward(retain_graph=True)
-            loss_gradient.backward(retain_graph=True)
             
             optimizer.step()
 
@@ -191,8 +194,14 @@ def main(opt):
 
                     depth_map = proj.get_img(points, trans.view(-1, 9))    
                     depth_map = torch.nn.functional.interpolate(depth_map, size=(224, 224), mode='bilinear', align_corners=True)
+
+                    depth_map_reverse = 1 - depth_map
+                    mask = (depth_map_reverse != 0).float()
+                    texture_map = unet(mask)
+                
+
+                    RGB_map = depth_map * texture_map
                     
-                    RGB_map = unet(depth_map)
                    
                     # Forward samples to the CLIP model
                     img_embedding = clip_model.encode_image(RGB_map).to(device)
