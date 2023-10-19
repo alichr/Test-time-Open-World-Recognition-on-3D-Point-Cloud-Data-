@@ -9,6 +9,7 @@ from utils.mv_utils_zs_ver_2 import Realistic_Projection_Learnable_new as Realis
 from model.PointNet import PointNetfeat, feature_transform_regularizer, STN3d
 from model.Transformation import Transformation
 from utils.dataloader_ModelNet40 import *
+from utils.datautil_3D_memory_incremental_modelnet import *
 from model.Relation import RelationNetwork
 import os
 import numpy as np
@@ -17,6 +18,8 @@ from torch import nn
 from utils.Loss import CombinedConstraintLoss
 from model.Unet import UNetPlusPlus
 from torchmetrics.functional.image import image_gradients
+from configs.modelnet_info import task_ids_total as tid
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
@@ -44,12 +47,21 @@ def main(opt):
 
     num_rotations = 1
     set_random_seed(opt.manualSeed) 
-    # deine data loader
-    train_dataset = ModelNetDataLoader(root='dataset/modelnet40_normal_resampled/', args=opt, split='train', process_data=opt.process_data)
-    test_dataset = ModelNetDataLoader(root='dataset/modelnet40_normal_resampled/', args=opt, split='test', process_data=opt.process_data)
-    trainDataLoader = torch.utils.data.DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True, num_workers=10, drop_last=True)
-    testDataLoader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=10)
-
+    path=Path(opt.dataset_path)
+    print(path)
+    dataloader = DatasetGen(opt, root=path, fewshot=5)
+    t = 0
+    dataset = dataloader.get(t,'training')
+    trainDataLoader = dataset[t]['train']
+    testDataLoader = dataset[t]['test'] 
+    
+    # t = 0# 0:1-25 , 1:26-37
+    # # deine data loader
+    # train_dataset = ModelNetDataLoader(root='dataset/modelnet40_normal_resampled/', args=opt, split='train', process_data=opt.process_data)
+    # test_dataset = ModelNetDataLoader(root='dataset/modelnet40_normal_resampled/', args=opt, split='test', process_data=opt.process_data)
+    # trainDataLoader = torch.utils.data.DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True, num_workers=10, drop_last=True)
+    # testDataLoader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=10)
+   
     # Step 1: Load CLIP model
     clip_model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-16', pretrained='laion2b_s34b_b88k')
     clip_model.to(device)
@@ -97,9 +109,12 @@ def main(opt):
        
 
         for i, data in tqdm(enumerate(trainDataLoader, 0)):
-            points, target = data
-            # convert numpy.int32 to torch.int32
+            points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
             points, target = points.to(device), target.to(device)
+
+            print('target',target)
+
+
             optimizer.zero_grad()
             points = points.transpose(2, 1)
             
@@ -127,7 +142,7 @@ def main(opt):
             img_embedding = clip_model.encode_image(RGB_map).to(device)
 
             # Forward samples to the text CLIP model
-            text_embedding = text_embedding_all_classes.to(device)
+            text_embedding = text_embedding_all_classes[tid[t]].to(device)
             
             # forwarding samples to the Relation module
             text_embedding = text_embedding.unsqueeze(0).repeat(opt.batch_size,1,1).to(device)
@@ -141,6 +156,7 @@ def main(opt):
     
             loss_t = cross_entrpy(relations, one_hot_labels)
             loss = loss_t + loss_orthogonal * loss_orthogonal_weight + loss_gradient
+            print('loss_t',loss)
 
            # print('loss',loss)
             loss.backward(retain_graph=True)
@@ -169,8 +185,7 @@ def main(opt):
         # evaluate the model       
         base_class_correct = 0
         base_class_total = 0
-        Logits = torch.zeros(2468,40).to(device)
-        Target = torch.zeros(2468).to(device)
+       
 
         transform.eval()
         relation.eval() 
@@ -178,9 +193,10 @@ def main(opt):
         clip_model.eval()
 
         for j, data in tqdm(enumerate(testDataLoader, 0)):
-            points, target = data
+            points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
             # convert numpy.int32 to torch.int32
             points, target = points.to(device), target.to(device)
+            print('target',target)
             features_2D = torch.zeros((1, 512), device=device)
             with torch.no_grad():
                     
@@ -210,7 +226,7 @@ def main(opt):
                     img_embedding = img_embedding[0,:].unsqueeze(0)
 
                     # Forward samples to the text CLIP model
-                    text_embedding = text_embedding_all_classes.to(device)
+                    text_embedding = text_embedding_all_classes[tid[t]].to(device)
                     
                     
                     text_embedding = text_embedding.unsqueeze(0).repeat(1,1,1).to(device)
@@ -224,6 +240,8 @@ def main(opt):
                      
             prediction = relations.cpu().detach().numpy()
             prediction = np.argmax(prediction, axis=1)
+            print(prediction)
+            print(target.cpu().detach().numpy())
             if prediction == target.cpu().detach().numpy():
                base_class_correct += 1
             
@@ -232,10 +250,8 @@ def main(opt):
             #base_class_correct += np.sum(prediction == target)
             logits = relations.cpu().detach()
 
-            Logits[j] = logits
-            Target[j] = target
 
-        acc = (base_class_correct / 2468) * 100
+        acc = (base_class_correct / 1958) * 100
         print(f"=> zero-shot accuracy: {acc:.2f}")
         print('-------------------------------------------------------------------------')
         # put the models in the training mode
@@ -256,8 +272,8 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str, default='cls/3D_model_249.pth', help='path to load a pre-trained model')
     parser.add_argument('--feature_transform', action='store_true', help='use feature transform')
     parser.add_argument('--manualSeed', type=int, default = 42, help='random seed')
-    parser.add_argument('--dataset_path', type=str, default= 'dataset/modelnet_scanobjectnn/', help="dataset path")
-    parser.add_argument('--ntasks', type=str, default= '1', help="number of tasks")
+    parser.add_argument('--dataset_path', type=str, default= 'dataset/FSCIL/modelnet/', help="dataset path")
+    parser.add_argument('--ntasks', type=str, default= '5', help="number of tasks")
     parser.add_argument('--nclasses', type=str, default= '26', help="number of classes")
     parser.add_argument('--task', type=str, default= '0', help="task number")
     parser.add_argument('--num_samples', type=str, default= '0', help="number of samples per class")
@@ -265,7 +281,10 @@ if __name__ == "__main__":
     parser.add_argument('--num_point', type=int, default=2048, help='Point Number')
     parser.add_argument('--use_uniform_sample', action='store_true', default=False, help='use uniform sampiling')
     parser.add_argument('--use_normals', action='store_true', default=False, help='use normals')
-    parser.add_argument('--num_category', default=40, type=int, choices=[10, 40],  help='training on ModelNet10/40')
+    parser.add_argument('--num_category', default=20, type=int, choices=[20, 40],  help='training on ModelNet10/40')
+    parser.add_argument('--sem_file', default=None,  help='training on ModelNet10/40')
+    parser.add_argument('--use_memory', default=False, help='use_memory')
+    parser.add_argument('--herding', default=True, help='herding')
     opt = parser.parse_args()
     main(opt)
     print("Done!")
