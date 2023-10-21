@@ -59,7 +59,7 @@ def accuracy(output, target, topk=(1,)):
 # define the main function
 def main(opt):
 
-    num_rotations = 1
+    num_rotations = 2
     set_random_seed(opt.manualSeed) 
     path=Path(opt.dataset_path)
     print(path)
@@ -68,6 +68,8 @@ def main(opt):
     dataset = dataloader.get(t,'training')
     trainDataLoader = dataset[t]['train']
     testDataLoader = dataset[t]['test'] 
+    
+
     
     # Step 1: Load CLIP model
     clip_model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-16', pretrained='laion2b_s34b_b88k')
@@ -78,8 +80,9 @@ def main(opt):
     # Step 2: Load Realistic Projection object
     proj = Realistic_Projection().to(device)
     # Step 3: Load the Transformation model
-    transform = STN3d()
-    transform = transform.to(device)
+    transform = {str(i): STN3d() for i in range(num_rotations)}
+    for i in range(num_rotations):
+        transform[str(i)].to(device)
 
     # load the Unet model
     unet = UNetPlusPlus().to(device)
@@ -94,7 +97,8 @@ def main(opt):
 
 
     # define the optimizer
-    optimizer = optim.Adam(list(transform.parameters()) + list(relation.parameters())  + list(unet.parameters()), lr=0.001, betas=(0.9, 0.999))
+    Parameters = [p for model in transform.values() for p in model.parameters()]
+    optimizer = optim.Adam(Parameters + list(relation.parameters())  + list(unet.parameters()), lr=0.001, betas=(0.9, 0.999))
 
     # load loss function
     cross_entrpy = nn.BCELoss()
@@ -104,7 +108,8 @@ def main(opt):
 
     # train the model
     clip_model.train()
-    transform.train()
+    for i in range(num_rotations):
+        transform[format(i)].train()
     unet.train()
     relation.train()
     print("=> Start training the model")
@@ -124,28 +129,43 @@ def main(opt):
             optimizer.zero_grad()
             points = points.transpose(2, 1)
             
-            trans = transform(points)
+            trans = torch.zeros((points.shape[0], num_rotations, 3, 3), device=device)
+            for jj in range(num_rotations):
+                trans[:, jj, :, :] = transform[format(jj)](points)
+            loss_orthogonal = constraint_loss(trans).mean()
                         
-            loss_orthogonal = constraint_loss(trans.unsqueeze(1)).mean()
+            #loss_orthogonal = constraint_loss(trans.unsqueeze(1)).mean()
 
             # Project samples to an image surface to generate 3 depth maps
             points = points.transpose(2, 1)   
-            depth_map = proj.get_img(points, trans.view(-1, 9))    
-            depth_map = torch.nn.functional.interpolate(depth_map, size=(224, 224), mode='bilinear', align_corners=True)    
+            depth_map = torch.zeros((points.shape[0] * num_rotations, 3, 224, 224)).to(device)  
+            for jj in range(num_rotations):
+                depth_map_tmp = proj.get_img(points, trans[:,jj,:,:].view(-1, 9))    
+                depth_map_tmp = torch.nn.functional.interpolate(depth_map_tmp, size=(224, 224), mode='bilinear', align_corners=True)
+                depth_map[jj * points.shape[0]:(jj + 1) * points.shape[0], :, :, :] = depth_map_tmp
             
-            # unet model
-            depth_map_reverse = 1 - depth_map
-            mask = (depth_map_reverse != 0).float()
-            texture_map = unet(mask)
-            # loss for gradient
-            dy_init, dx_init = image_gradients(mask)
-            dy, dx = image_gradients(texture_map)
-            loss_gradient = mse_loss(dy, dy_init) + mse_loss(dx, dx_init)
+            
+            loss_gradient = 0
+            RGB_map = torch.zeros((points.shape[0] * num_rotations, 3, 224, 224)).to(device)
+            for jj in range(num_rotations):
+                # unet model
+                depth_map_reverse = 1 - depth_map[jj * points.shape[0]:(jj + 1) * points.shape[0]]
+                mask = (depth_map_reverse != 0).float()
+                texture_map = unet(mask)
+                # loss for gradient
+                dy_init, dx_init = image_gradients(mask)
+                dy, dx = image_gradients(texture_map)
+                loss_gradient += mse_loss(dy, dy_init) + mse_loss(dx, dx_init)
 
-            RGB_map = depth_map * texture_map
+                RGB_map[jj * points.shape[0]:(jj + 1) * points.shape[0], :, :, :] = depth_map[jj] * texture_map
+            
 
             # Forward samples to the vision CLIP model
-            img_embedding = clip_model.encode_image(RGB_map).to(device)
+            img_embedding_tmp = clip_model.encode_image(RGB_map).to(device)
+            img_embedding = 0
+            for jj in range(num_rotations):
+                img_embedding += img_embedding_tmp[jj * points.shape[0]:(jj + 1) * points.shape[0], :]/ num_rotations
+            
 
             # Sample prompts from prompts dictionary
             prompts_batch = []
@@ -172,6 +192,7 @@ def main(opt):
     
             loss_t = cross_entrpy(relations, one_hot_labels)
             loss = loss_t + loss_orthogonal * loss_orthogonal_weight + loss_gradient
+            print('loss',loss)
 
            # print('loss',loss)
             loss.backward(retain_graph=True)
@@ -193,8 +214,11 @@ def main(opt):
             torch.cuda.empty_cache()
         print('Relation Module','loss_orthogonal_weight:',loss_orthogonal_weight, 'number of view', num_rotations)    
         print(f"=> Epoch {epoch} loss: {train_loss:.2f} accuracy: {100 * train_correct / train_total:.2f}")
-        torch.save(transform.state_dict(), '%s/transform_%d.pth' % (opt.outf, epoch))
         torch.save(relation.state_dict(), '%s/relation_%d.pth' % (opt.outf, epoch))
+        torch.save(unet.state_dict(), '%s/unet_%d.pth' % (opt.outf, epoch))
+        # save multiple transformations
+        for i in range(num_rotations):
+            torch.save(transform[format(i)].state_dict(), '%s/transform_%d_%d.pth' % (opt.outf, epoch, i))
 
 
         # evaluate the model       
@@ -202,7 +226,8 @@ def main(opt):
         base_class_total = 0
        
 
-        transform.eval()
+        for i in range(num_rotations):
+            transform[format(i)].eval()
         relation.eval() 
         unet.eval()
         clip_model.eval()
@@ -213,22 +238,35 @@ def main(opt):
 
         for j, data in tqdm(enumerate(testDataLoader, 0)):
             points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
-            # convert numpy.int32 to torch.int32
             points, target = points.to(device), target.to(device)
-            print('target',target)
             features_2D = torch.zeros((1, 512), device=device)
             with torch.no_grad():
                     
                     depth_map = torch.zeros((points.shape[0] * num_rotations, 3, 110, 110)).to(device)
                     # Forward samples to the PointNet model
                     points = points.transpose(2, 1)
-                    points = points.repeat(2, 1, 1)     
-                    trans = transform(points)
+                    points = points.repeat(2, 1, 1)                       
+                    
+                    trans = torch.zeros((points.shape[0], num_rotations, 3, 3), device=device)
+                    for jj in range(num_rotations):
+                        trans[:, jj, :, :] = transform[format(jj)](points)
          
                     points = points.transpose(2, 1)   
 
-                    depth_map = proj.get_img(points, trans.view(-1, 9))    
-                    depth_map = torch.nn.functional.interpolate(depth_map, size=(224, 224), mode='bilinear', align_corners=True)
+                    depth_map = torch.zeros((points.shape[0] * num_rotations, 3, 224, 224)).to(device)  
+                    for jj in range(num_rotations):
+                        depth_map_tmp = proj.get_img(points, trans[:,jj,:,:].view(-1, 9))    
+                        depth_map_tmp = torch.nn.functional.interpolate(depth_map_tmp, size=(224, 224), mode='bilinear', align_corners=True)
+                        depth_map[jj * points.shape[0]:(jj + 1) * points.shape[0], :, :, :] = depth_map_tmp 
+                   
+                    RGB_map = torch.zeros((points.shape[0] * num_rotations, 3, 224, 224)).to(device) 
+                    for jj in range(num_rotations):
+                        # unet model
+                        depth_map_reverse = 1 - depth_map[jj * points.shape[0]:(jj + 1) * points.shape[0]]
+                        mask = (depth_map_reverse != 0).float()
+                        texture_map = unet(mask)
+
+                        RGB_map[jj * points.shape[0]:(jj + 1) * points.shape[0], :, :, :] = depth_map[jj] * texture_map
 
                     depth_map_reverse = 1 - depth_map
                     mask = (depth_map_reverse != 0).float()
@@ -239,8 +277,10 @@ def main(opt):
                     
                    
                     # Forward samples to the CLIP model
-                    img_embedding = clip_model.encode_image(RGB_map).to(device)
-                    img_embedding = img_embedding
+                    img_embedding_tmp = clip_model.encode_image(RGB_map).to(device)
+                    img_embedding = 0
+                    for jj in range(num_rotations):
+                        img_embedding += img_embedding_tmp[jj * points.shape[0]:(jj + 1) * points.shape[0], :]/ num_rotations
                     
                     img_embedding = img_embedding[0,:].unsqueeze(0)
 
@@ -259,8 +299,6 @@ def main(opt):
                      
             prediction = relations.cpu().detach().numpy()
             prediction = np.argmax(prediction, axis=1)
-            print(prediction)
-            print(target.cpu().detach().numpy())
             if prediction == target.cpu().detach().numpy():
                base_class_correct += 1
             
@@ -275,7 +313,8 @@ def main(opt):
         print('-------------------------------------------------------------------------')
         # put the models in the training mode
 
-        transform.train()
+        for i in range(num_rotations):
+            transform[format(i)].train()
         relation.train()
         unet.train()
         clip_model.train()
