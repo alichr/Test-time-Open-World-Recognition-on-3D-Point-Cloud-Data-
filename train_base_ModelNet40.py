@@ -149,7 +149,6 @@ def main(opt):
                 depth_map_tmp = torch.nn.functional.interpolate(depth_map_tmp, size=(224, 224), mode='bilinear', align_corners=True)
                 depth_map[jj * points.shape[0]:(jj + 1) * points.shape[0], :, :, :] = depth_map_tmp
             
-            
             loss_gradient = 0
             RGB_map = torch.zeros((points.shape[0] * num_rotations, 3, 224, 224)).to(device)
             for jj in range(num_rotations):
@@ -162,7 +161,6 @@ def main(opt):
                 dy, dx = image_gradients(texture_map)
                 loss_gradient += mse_loss(dy, dy_init) + mse_loss(dx, dx_init)
                 RGB_map[jj * points.shape[0]:(jj + 1) * points.shape[0], :, :, :] = depth_map[jj * points.shape[0]:(jj + 1) * points.shape[0]] * texture_map
-            
 
             # Forward samples to the vision CLIP model
             img_embedding_tmp = clip_model.encode_image(RGB_map).to(device)
@@ -196,14 +194,11 @@ def main(opt):
             one_hot_labels = (torch.zeros(opt.batch_size, opt.num_category).to(device).scatter_(1, target.long().view(-1,1), 1))
             loss_t = cross_entrpy(relations, one_hot_labels)
             loss = loss_t + loss_orthogonal * loss_orthogonal_weight + loss_gradient
-
             loss.backward(retain_graph=True)
             optimizer.step()
 
             # Calculating the accuracy
             train_loss += loss.clone().detach().item()
-
-            # calculate the accuracy
             prediction = relations.cpu().detach().numpy()
             prediction = np.argmax(prediction, axis=1)
             target = target.cpu().detach().numpy()
@@ -248,14 +243,15 @@ def main(opt):
                     # Forward samples to the PointNet model
                     points = points.transpose(2, 1)
                     points = points.repeat(2, 1, 1)   
-                    points_embedding,_,_ = pointnet(points)                    
-                    
+                    points_embedding,_,_ = pointnet(points)
+
+                    # transformation module
                     trans = torch.zeros((points.shape[0], num_rotations, 3, 3), device=device)
                     for jj in range(num_rotations):
                         trans[:, jj, :, :] = transform[format(jj)](points)
-         
+                    
+                    # depth map generation
                     points = points.transpose(2, 1)   
-
                     depth_map = torch.zeros((points.shape[0] * num_rotations, 3, 224, 224)).to(device)  
                     for jj in range(num_rotations):
                         depth_map_tmp = proj.get_img(points, trans[:,jj,:,:].view(-1, 9))    
@@ -268,17 +264,8 @@ def main(opt):
                         depth_map_reverse = 1 - depth_map[jj * points.shape[0]:(jj + 1) * points.shape[0]]
                         mask = (depth_map_reverse != 0).float()
                         texture_map = unet(mask)
-
                         RGB_map[jj * points.shape[0]:(jj + 1) * points.shape[0], :, :, :] = depth_map[jj * points.shape[0]:(jj + 1) * points.shape[0]] * texture_map
 
-                    depth_map_reverse = 1 - depth_map
-                    mask = (depth_map_reverse != 0).float()
-                    texture_map = unet(mask)
-                
-
-                    RGB_map = depth_map * texture_map
-                    
-                   
                     # Forward samples to the CLIP model
                     img_embedding_tmp = clip_model.encode_image(RGB_map).to(device)
                     img_embedding = 0
@@ -289,14 +276,11 @@ def main(opt):
                     fea_embedding = (img_embedding + points_embedding)/2
                     fea_embedding = fea_embedding[0,:].unsqueeze(0)
 
-
                     # Forward samples to the text CLIP model
                     text_embedding = text_embedding_all_classes[tid[t]].to(device)
                     
-                    
+                    # forwarding samples to the Relation module
                     text_embedding = text_embedding.unsqueeze(0).repeat(1,1,1).to(device)
-                    
-
                     fea_embedding = fea_embedding.unsqueeze(0).repeat(opt.num_category,1,1).to(device)
                     fea_embedding = torch.transpose(fea_embedding,0,1).to(device)
                     relation_pairs = torch.cat((text_embedding.float(),fea_embedding.float()),2).view(-1,1024)

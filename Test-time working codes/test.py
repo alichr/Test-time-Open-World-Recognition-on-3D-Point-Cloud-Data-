@@ -17,6 +17,7 @@ from torch import nn
 from utils.Loss import CombinedConstraintLoss
 from model.Unet import UNetPlusPlus
 import json
+from PIL import Image
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
@@ -30,7 +31,7 @@ def set_random_seed(seed):
 def read_txt_file(file):
     with open(file, 'r') as f:
         array = f.readlines()
-    array = ["A depth map of " + x.strip() for x in array]
+    array = ["An image of " + x.strip() for x in array]
     array = list(filter(None, array))
     return array
 
@@ -76,12 +77,15 @@ def main(opt):
     proj = Realistic_Projection().to(device)
     # Step 3: Load the Transformation model
     transform = STN3d()
-    transform.load_state_dict(torch.load('cls/transform_67.pth',map_location='cpu'))
     transform = transform.to(device)
     # Step 4: Load the Relation Network
     relation = RelationNetwork(1024, 512, 256)
-    relation.load_state_dict(torch.load('cls/relation_67.pth',map_location='cpu'))
+    #relation.load_state_dict(torch.load('cls/relation_67.pth',map_location='cpu'))
     relation = relation.to(device)
+
+    # step 5: Load the unet model
+    unet = UNetPlusPlus()
+    unet = unet.to(device)
     
     
     #load the text features
@@ -101,6 +105,7 @@ def main(opt):
     transform.eval()
     relation.eval() 
     clip_model.eval()
+    unet.eval()
 
         #load the text features
     prompts = read_txt_file("class_name_modelnet40.txt")
@@ -112,59 +117,51 @@ def main(opt):
         points, target = points.to(device), target.to(device)
         features_2D = torch.zeros((1, 512), device=device)
         with torch.no_grad():
-                
-                depth_map = torch.zeros((points.shape[0] * num_rotations, 3, 110, 110)).to(device)
-                # Forward samples to the PointNet model
-                points = points.transpose(2, 1)
-                points = points.repeat(2, 1, 1)     
-                trans = transform(points)
-        
-                points = points.transpose(2, 1)   
+                for i in range(opt.nepoch):
+                    transform.load_state_dict(torch.load('cls/relation_' + str(i) + '.pth',map_location='cpu'))
+                    relation.load_state_dict(torch.load('cls/relation_' + str(i) + '.pth',map_location='cpu'))
+                    unet.load_state_dict(torch.load('cls/relation_' + str(i) + '.pth',map_location='cpu'))
+                    transform.eval()
+                    relation.eval()
+                    unet.eval()               
+                    depth_map = torch.zeros((points.shape[0] * num_rotations, 3, 110, 110)).to(device)
+                    # Forward samples to the PointNet model
+                    points = points.transpose(2, 1)
+                    points = points.repeat(2, 1, 1)     
+                    trans = transform(points)
+            
+                    points = points.transpose(2, 1)   
 
-                depth_map = proj.get_img(points, trans.view(-1, 9))    
-                depth_map = torch.nn.functional.interpolate(depth_map, size=(224, 224), mode='bilinear', align_corners=True)
-                
-                # Forward samples to the CLIP model
-                img_embedding = clip_model.encode_image(depth_map).to(device)
-                img_embedding = img_embedding
-                
-                img_embedding = img_embedding[0,:].unsqueeze(0)
+                    depth_map = proj.get_img(points, trans.view(-1, 9))    
+                    depth_map = torch.nn.functional.interpolate(depth_map, size=(224, 224), mode='bilinear', align_corners=True)
 
-                # Forward samples to the text CLIP model
-                text_embedding = text_embedding_all_classes.to(device)
-                
-                
-                text_embedding = text_embedding.unsqueeze(0).repeat(1,1,1).to(device)
-                
+                    depth_map_reverse = 1 - depth_map
+                    mask = (depth_map_reverse != 0).float()
+                    texture_map = unet(mask)
+                    RGB_map = depth_map * texture_map
 
-                img_embedding = img_embedding.unsqueeze(0).repeat(opt.num_category,1,1).to(device)
-                img_embedding = torch.transpose(img_embedding,0,1).to(device)
-                relation_pairs = torch.cat((text_embedding.float(),img_embedding.float()),2).view(-1,1024)
-                relations = relation(relation_pairs.float()).view(-1, opt.num_category).to(device)
+                    # save the RGB_map as an image
+                    img = RGB_map[0,:,:,:].squeeze(0).permute(1,2,0).cpu().numpy()
+                    img = (img - img.min()) / (img.max() - img.min())
+                    img = (img * 255).astype(np.uint8)
+                    img = Image.fromarray(img)
+
+                    img.save('3D-to-2D-proj/vase/test' + str(i) + '.png')
+
+                    # clear the cache
+                    torch.cuda.empty_cache()
+
+                stop
+
+
                 
                     
-        prediction = relations.cpu().detach().numpy()
-        prediction = np.argmax(prediction, axis=1)
-        if prediction == target.cpu().detach().numpy():
-            base_class_correct += 1
-        print(f"=> zero-shot accuracy: {(base_class_correct/(j+1))*100:.2f}")
-        
-        #target = target.cpu().detach().numpy()
-        # base_class_total += target.shape[0]
-        #base_class_correct += np.sum(prediction == target)
-        logits = relations.cpu().detach()
 
-        Logits[j] = logits
-        Target[j] = target
-
-    acc = (base_class_correct / 2468) * 100
-    print(f"=> zero-shot accuracy: {acc:.2f}")
-    print('-------------------------------------------------------------------------')
-    # put the models in the training mode
-
-    transform.train()
-    relation.train()
-    clip_model.train()
+ 
+                    
+                        
+                   
+              
  
 
 if __name__ == "__main__":
