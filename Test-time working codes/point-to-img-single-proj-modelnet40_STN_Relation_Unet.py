@@ -164,6 +164,7 @@ def main(opt):
         print(f"=> Epoch {epoch} loss: {train_loss:.2f} accuracy: {100 * train_correct / train_total:.2f}")
         torch.save(transform.state_dict(), '%s/transform_%d.pth' % (opt.outf, epoch))
         torch.save(relation.state_dict(), '%s/relation_%d.pth' % (opt.outf, epoch))
+        torch.save(unet.state_dict(), '%s/unet_%d.pth' % (opt.outf, epoch))
 
 
         # evaluate the model       

@@ -60,7 +60,6 @@ def accuracy(output, target, topk=(1,)):
 def main(opt):
 
     num_rotations = 1
-    fea_weight = 0.8
     set_random_seed(opt.manualSeed) 
     path=Path(opt.dataset_path)
     print(path)
@@ -70,10 +69,6 @@ def main(opt):
     trainDataLoader = dataset[t]['train']
     testDataLoader = dataset[t]['test'] 
 
-    # import pointnet model
-    pointnet = PointNetfeat(global_feat=True, feature_transform=opt.feature_transform)
-    pointnet = pointnet.to(device)
-    #pointnet.load_state_dict(torch.load('cls/pointnet_5.pth', map_location=device))
     
     # Step 1: Load CLIP model
     clip_model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-16', pretrained='laion2b_s34b_b88k')
@@ -87,21 +82,12 @@ def main(opt):
     transform = {str(i): STN3d() for i in range(num_rotations)}
     for i in range(num_rotations):
         transform[str(i)].to(device)
-       # transform[str(i)].load_state_dict(torch.load('cls/transform_5_%d.pth' % i, map_location=device))
-        # for param in transform[str(i)].parameters():
-        #     param.requires_grad = False
-    
-   
+
     # load the Unet model
     unet = UNetPlusPlus().to(device)
-   # unet.load_state_dict(torch.load('cls/unet_5.pth', map_location=device))
-
-    
-
     # Step 4: Load the Relation Network
-    relation = RelationNetwork(1536, 2048, 1024)
+    relation = RelationNetwork(1024, 512, 256)
     relation = relation.to(device)
-    #relation.load_state_dict(torch.load('cls/relation_5.pth', map_location=device))
     
     #load the text features
     class_name = read_txt_file_class_name("class_name.txt")
@@ -109,9 +95,9 @@ def main(opt):
     prompts = read_json_file("modelnet40_1000.json")
     
 
-    # define the optimizer with all models
-    optimizer = optim.Adam(list(pointnet.parameters()) + list(relation.parameters()) + list(unet.parameters()) + list(transform[str(0)].parameters()), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0005)
-   
+    # define the optimizer
+    Parameters = [p for model in transform.values() for p in model.parameters()]
+    optimizer = optim.Adam(Parameters + list(relation.parameters())  + list(unet.parameters()), lr=0.001, betas=(0.9, 0.999))
 
     # load loss function
     cross_entrpy = nn.BCELoss()
@@ -125,7 +111,6 @@ def main(opt):
         transform[format(i)].train()
     unet.train()
     relation.train()
-    pointnet.train()
     print("=> Start training the model")
     for epoch in range(opt.nepoch):
         # define the loss
@@ -142,9 +127,6 @@ def main(opt):
 
             optimizer.zero_grad()
             points = points.transpose(2, 1)
-
-            # Forward samples to the PointNet model
-            points_embedding,_,_ = pointnet(points)
 
             # transformation module
             trans = torch.zeros((points.shape[0], num_rotations, 3, 3), device=device)
@@ -178,12 +160,7 @@ def main(opt):
             img_embedding = 0
             for jj in range(num_rotations):
                 img_embedding += img_embedding_tmp[jj * points.shape[0]:(jj + 1) * points.shape[0], :]/ num_rotations
-            
-            # merge img_embedding and points_embedding
-            img_embedding = img_embedding / torch.norm(img_embedding, dim=1).view(-1, 1)
-            points_embedding = points_embedding / torch.norm(points_embedding, dim=1).view(-1, 1)
-            fea_embedding = torch.cat((img_embedding, points_embedding), 1)
-            
+                                
             # Sample prompts from prompts dictionary
             prompts_batch = []
             for j in range(opt.num_category):
@@ -195,13 +172,12 @@ def main(opt):
             # Forward samples to the text CLIP model
             text = open_clip.tokenize(prompts_batch)
             text_embedding = clip_model.encode_text(text.to(device))
-            text_embedding = text_embedding / torch.norm(text_embedding, dim=1).view(-1, 1)
                         
             # forwarding samples to the Relation module
             text_embedding = text_embedding.unsqueeze(0).repeat(opt.batch_size,1,1).to(device)
-            fea_embedding = fea_embedding.unsqueeze(0).repeat(opt.num_category,1,1)
-            fea_embedding = torch.transpose(fea_embedding,0,1).to(device)
-            relation_pairs = torch.cat((text_embedding.float(),fea_embedding.float()),2).view(-1,1536)
+            img_embedding = img_embedding.unsqueeze(0).repeat(opt.num_category,1,1)
+            img_embedding = torch.transpose(img_embedding,0,1).to(device)
+            relation_pairs = torch.cat((text_embedding.float(),img_embedding.float()),2).view(-1,1024)
             relations = relation(relation_pairs.float()).view(-1, opt.num_category).to(device)
 
             # cllculate the loss
@@ -226,22 +202,18 @@ def main(opt):
         print(f"=> Epoch {epoch} loss: {train_loss:.2f} accuracy: {100 * train_correct / train_total:.2f}")
         torch.save(relation.state_dict(), '%s/relation_%d.pth' % (opt.outf, epoch))
         torch.save(unet.state_dict(), '%s/unet_%d.pth' % (opt.outf, epoch))
-        torch.save(pointnet.state_dict(), '%s/pointnet_%d.pth' % (opt.outf, epoch))
         # save multiple transformations
         for i in range(num_rotations):
             torch.save(transform[format(i)].state_dict(), '%s/transform_%d_%d.pth' % (opt.outf, epoch, i))
-
+       
         # evaluate the model       
         base_class_correct = 0
         base_class_total = 0
-       
-
         for i in range(num_rotations):
             transform[format(i)].eval()
         relation.eval() 
         unet.eval()
         clip_model.eval()
-        pointnet.eval()
         #load the text features
         prompts_test = read_txt_file("class_name_modelnet40.txt")
         text = open_clip.tokenize(prompts_test)
@@ -250,15 +222,12 @@ def main(opt):
         for j, data in tqdm(enumerate(testDataLoader, 0)):
             points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
             points, target = points.to(device), target.to(device)
-            features_2D = torch.zeros((1, 512), device=device)
             with torch.no_grad():
                     
                     depth_map = torch.zeros((points.shape[0] * num_rotations, 3, 110, 110)).to(device)
                     # Forward samples to the PointNet model
                     points = points.transpose(2, 1)
                     points = points.repeat(2, 1, 1)   
-                    points_embedding,_,_ = pointnet(points)
-
                     # transformation module
                     trans = torch.zeros((points.shape[0], num_rotations, 3, 3), device=device)
                     for jj in range(num_rotations):
@@ -287,20 +256,17 @@ def main(opt):
                         img_embedding += img_embedding_tmp[jj * points.shape[0]:(jj + 1) * points.shape[0], :]/ num_rotations
 
                     # merge img_embedding and points_embedding
-                    img_embedding = img_embedding / torch.norm(img_embedding, dim=1).view(-1, 1)
-                    points_embedding = points_embedding / torch.norm(points_embedding, dim=1).view(-1, 1)
-                    fea_embedding = torch.cat((img_embedding, points_embedding), 1)
-                    fea_embedding = fea_embedding[0,:].unsqueeze(0)
+      
+                    img_embedding = img_embedding[0,:].unsqueeze(0)
 
                     # Forward samples to the text CLIP model
                     text_embedding = text_embedding_all_classes[tid[t]].to(device)
-                    text_embedding = text_embedding / torch.norm(text_embedding, dim=1).view(-1, 1)
                     
                     # forwarding samples to the Relation module
                     text_embedding = text_embedding.unsqueeze(0).repeat(1,1,1).to(device)
-                    fea_embedding = fea_embedding.unsqueeze(0).repeat(opt.num_category,1,1).to(device)
-                    fea_embedding = torch.transpose(fea_embedding,0,1).to(device)
-                    relation_pairs = torch.cat((text_embedding.float(),fea_embedding.float()),2).view(-1,1536)
+                    img_embedding = img_embedding.unsqueeze(0).repeat(opt.num_category,1,1).to(device)
+                    img_embedding = torch.transpose(img_embedding,0,1).to(device)
+                    relation_pairs = torch.cat((text_embedding.float(),img_embedding.float()),2).view(-1,1024)
                     relations = relation(relation_pairs.float()).view(-1, opt.num_category).to(device)
                    
                      
@@ -322,10 +288,6 @@ def main(opt):
         relation.train()
         unet.train()
         clip_model.train()
-        pointnet.train()
-
-        # adding two vectors
-        
  
 
 if __name__ == "__main__":
