@@ -8,8 +8,7 @@ import open_clip
 from utils.mv_utils_zs_ver_2 import Realistic_Projection_Learnable_new as Realistic_Projection 
 from model.PointNet import PointNetfeat, feature_transform_regularizer, STN3d
 from model.Transformation import Transformation
-from utils.dataloader_ModelNet40 import *
-from utils.datautil_3D_memory_incremental_modelnet import *
+from utils.datautil_3D_memory_incremental_modelnet_to_scanobjectnn import *
 from model.Relation import RelationNetwork
 import os
 import numpy as np
@@ -18,9 +17,11 @@ from torch import nn
 from utils.Loss import CombinedConstraintLoss
 from model.Unet import UNetPlusPlus
 from torchmetrics.functional.image import image_gradients
-from configs.modelnet_info import task_ids_total as tid
+from configs.modelnet_scanobjectNN_info import task_ids_total as tid
 import json
+import datetime
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 
 
 def set_random_seed(seed):
@@ -73,7 +74,6 @@ def main(opt):
     # import pointnet model
     pointnet = PointNetfeat(global_feat=True, feature_transform=opt.feature_transform)
     pointnet = pointnet.to(device)
-    #pointnet.load_state_dict(torch.load('cls/pointnet_5.pth', map_location=device))
     
     # Step 1: Load CLIP model
     clip_model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-16', pretrained='laion2b_s34b_b88k')
@@ -87,32 +87,22 @@ def main(opt):
     transform = {str(i): STN3d() for i in range(num_rotations)}
     for i in range(num_rotations):
         transform[str(i)].to(device)
-       # transform[str(i)].load_state_dict(torch.load('cls/transform_5_%d.pth' % i, map_location=device))
-        # for param in transform[str(i)].parameters():
-        #     param.requires_grad = False
-    
-   
+
     # load the Unet model
     unet = UNetPlusPlus().to(device)
-   # unet.load_state_dict(torch.load('cls/unet_5.pth', map_location=device))
-
-    
 
     # Step 4: Load the Relation Network
     relation = RelationNetwork(1536, 2048, 1024)
     relation = relation.to(device)
-    #relation.load_state_dict(torch.load('cls/relation_5.pth', map_location=device))
     
     #load the text features
     class_name = read_txt_file_class_name("class_name.txt")
     class_name_prompt = read_txt_file("class_name_modelnet40.txt")
     prompts = read_json_file("modelnet40_1000.json")
     
-
     # define the optimizer with all models
-    optimizer = optim.Adam(list(pointnet.parameters()) + list(relation.parameters()) + list(unet.parameters()) + list(transform[str(0)].parameters()), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0005)
+    optimizer = optim.Adam(list(pointnet.parameters()) + list(relation.parameters()) + list(unet.parameters()) + list(transform[str(0)].parameters()), lr=0.001, betas=(0.9, 0.999))
    
-
     # load loss function
     cross_entrpy = nn.BCELoss()
     constraint_loss = CombinedConstraintLoss(num_rotations=num_rotations)
@@ -133,7 +123,6 @@ def main(opt):
         train_correct = 0
         train_total = 0
        
-
         for i, data in tqdm(enumerate(trainDataLoader, 0)):
             points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
             points, target = points.to(device), target.to(device)
@@ -191,7 +180,7 @@ def main(opt):
                 tmp_2 = prompts[tmp_1]
                 random_idx = random.randint(0, len(tmp_2)-1)
                 prompts_batch.append(tmp_2[random_idx])
-   
+         
             # Forward samples to the text CLIP model
             text = open_clip.tokenize(prompts_batch)
             text_embedding = clip_model.encode_text(text.to(device))
@@ -235,7 +224,6 @@ def main(opt):
         base_class_correct = 0
         base_class_total = 0
        
-
         for i in range(num_rotations):
             transform[format(i)].eval()
         relation.eval() 
@@ -309,12 +297,21 @@ def main(opt):
             if prediction == target.cpu().detach().numpy():
                base_class_correct += 1
             
-            logits = relations.cpu().detach()
-
-
-        acc = (base_class_correct / 1958) * 100
+        acc = (base_class_correct / 1496) * 100
         print(f"=> zero-shot accuracy: {acc:.2f}")
-        print('-------------------------------------------------------------------------')
+        # save the results on a txt file on a new folder for every time the code is run! The folder has the name of the date and time
+        if not os.path.exists('results'):
+            os.makedirs('results')
+        if not os.path.exists('results/' + str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))):
+            os.makedirs('results/' + str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        f = open('results/' + str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + '/results.txt', 'a')
+        f.write('-------------------------------------------------------------------------\n')
+        f.write('Relation Module, Point embedding + img _embedding: ' + str(loss_orthogonal_weight) + ' number of view: ' + str(num_rotations) + '\n')
+        f.write('=> Epoch ' + str(epoch) + ' loss: ' + str(train_loss) + ' accuracy: ' + str(100 * train_correct / train_total) + '\n')
+        f.write('=> zero-shot accuracy: ' + str(acc) + '\n')
+        f.close()
+        
+
         # put the models in the training mode
 
         for i in range(num_rotations):
@@ -323,22 +320,18 @@ def main(opt):
         unet.train()
         clip_model.train()
         pointnet.train()
-
-        # adding two vectors
         
- 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', type=int, default= 32, help='input batch size')
     parser.add_argument('--num_points', type=int, default=2048, help='number of points in each input point cloud')
     parser.add_argument('--workers', type=int, help='number of data loading workers', default=4)
     parser.add_argument('--nepoch', type=int, default=250, help='number of epochs to train for')
-    parser.add_argument('--outf', type=str, default='cls', help='output folder to save results')
+    parser.add_argument('--outf', type=str, default='cls/modelnet_scanobjectnn', help='output folder to save results')
     parser.add_argument('--model', type=str, default='cls/3D_model_249.pth', help='path to load a pre-trained model')
     parser.add_argument('--feature_transform', action='store_true', help='use feature transform')
     parser.add_argument('--manualSeed', type=int, default = 42, help='random seed')
-    parser.add_argument('--dataset_path', type=str, default= 'dataset/FSCIL/modelnet/', help="dataset path")
+    parser.add_argument('--dataset_path', type=str, default= 'dataset/FSCIL/modelnet_scanobjectnn/', help="dataset path")
     parser.add_argument('--ntasks', type=str, default= '5', help="number of tasks")
     parser.add_argument('--nclasses', type=str, default= '26', help="number of classes")
     parser.add_argument('--task', type=str, default= '0', help="task number")
@@ -347,7 +340,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_point', type=int, default=2048, help='Point Number')
     parser.add_argument('--use_uniform_sample', action='store_true', default=False, help='use uniform sampiling')
     parser.add_argument('--use_normals', action='store_true', default=False, help='use normals')
-    parser.add_argument('--num_category', default=20, type=int, choices=[20, 40],  help='training on ModelNet10/40')
+    parser.add_argument('--num_category', default=26, type=int, choices=[20, 40],  help='training on ModelNet10/40')
     parser.add_argument('--sem_file', default=None,  help='training on ModelNet10/40')
     parser.add_argument('--use_memory', default=False, help='use_memory')
     parser.add_argument('--herding', default=True, help='herding')

@@ -110,7 +110,7 @@ def main(opt):
     
 
     # define the optimizer with all models
-    optimizer = optim.Adam(list(pointnet.parameters()) + list(relation.parameters()) + list(unet.parameters()) + list(transform[str(0)].parameters()), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0005)
+    optimizer = optim.Adam(list(pointnet.parameters()) + list(relation.parameters()) + list(unet.parameters()) + list(transform[str(0)].parameters()), lr=0.001, betas=(0.9, 0.999))
    
 
     # load loss function
