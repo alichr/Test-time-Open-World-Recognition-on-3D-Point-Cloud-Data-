@@ -109,7 +109,7 @@ def main(opt):
     # load the data
     prototype = np.zeros((37, 512))
     sample_num = np.zeros((37))
-    for t in range(0,5):
+    for t in range(0,4):
         path=Path(opt.dataset_path)
         print(path)
         dataloader = DatasetGen(opt, root=path, fewshot=5)
@@ -193,7 +193,7 @@ def main(opt):
 
     Distance = np.zeros((37))
     print('----------------------------------------------------------')
-    for t in range(0,5):
+    for t in range(0,4):
         path=Path(opt.dataset_path)
         print(path)
         dataloader = DatasetGen(opt, root=path, fewshot=5)

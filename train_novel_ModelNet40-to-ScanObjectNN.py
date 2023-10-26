@@ -9,7 +9,6 @@ from utils.mv_utils_zs_ver_2 import Realistic_Projection_Learnable_new as Realis
 from model.PointNet import PointNetfeat, feature_transform_regularizer, STN3d
 from model.Transformation import Transformation
 from utils.datautil_3D_memory_incremental_modelnet_to_scanobjectnn import *
-from utils.datautil_3D_memory_incremental_modelnet import *
 from model.Relation import RelationNetwork
 import os
 import numpy as np
@@ -21,7 +20,6 @@ from torchmetrics.functional.image import image_gradients
 from configs.modelnet_info import task_ids_total as tid
 import json
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
 
 def set_random_seed(seed):
     random.seed(seed)
@@ -118,14 +116,21 @@ def main(opt):
     memory_bank_label = torch.from_numpy(memory_bank_label).to(device)
 
  
-    for t in range(0,5):
+    for t in range(0,4):
         path=Path(opt.dataset_path)
         print(path)
         dataloader = DatasetGen(opt, root=path, fewshot=5)
         dataset = dataloader.get(t,'training')
         trainDataLoader = dataset[t]['train']
         testDataLoader = dataset[t]['test'] 
-        num_category = 20 + t * 5
+        if t == 0:
+            num_category = 26
+        elif t == 1:
+            num_category = 30
+        elif t == 2:
+            num_category = 34
+        else:
+            num_category = 37     
         print('task:', t)
         # train the model
         clip_model.train()
@@ -136,6 +141,8 @@ def main(opt):
         pointnet.train()
         print("=> Start training the model")
         # construct the memory bank
+        if t == 1:
+
         memory_bank_task = memory_bank[0:(num_category-5),:,:]
         memory_bank_label_task = memory_bank_label[0:(num_category-5),:]
         mm = 0
@@ -269,7 +276,7 @@ def main(opt):
         prompts_test = read_txt_file("class_name_modelnet40.txt")
         text = open_clip.tokenize(prompts_test)
         text_embedding_all_classes = clip_model.encode_text(text.to(device))
-        task1, task2, task3, task4, task5, task1_total, task2_total, task3_total, task4_total, task5_total = [0] * 10
+        task1, task2, task3, task4, task1_total, task2_total, task3_total, task4_total = [0] * 8
         tid_all = []
         for h in range(t+1):                
             tid_all += tid[h]
@@ -335,27 +342,23 @@ def main(opt):
             prediction = np.argmax(prediction, axis=1)
             if prediction == target.cpu().detach().numpy():
                 base_class_correct += 1
-            if prediction == target.cpu().detach().numpy() and target.cpu().detach().numpy() < 20:
+            if prediction == target.cpu().detach().numpy() and target.cpu().detach().numpy() < 26:
                 task1 += 1
-            if prediction == target.cpu().detach().numpy() and target.cpu().detach().numpy() >= 20 and target.cpu().detach().numpy() < 25:
+            if prediction == target.cpu().detach().numpy() and target.cpu().detach().numpy() >= 26 and target.cpu().detach().numpy() < 30:
                 task2 += 1
-            if prediction == target.cpu().detach().numpy() and target.cpu().detach().numpy() >= 25 and target.cpu().detach().numpy() < 30:
+            if prediction == target.cpu().detach().numpy() and target.cpu().detach().numpy() >= 30 and target.cpu().detach().numpy() < 34:
                 task3 += 1
-            if prediction == target.cpu().detach().numpy() and target.cpu().detach().numpy() >= 30 and target.cpu().detach().numpy() < 35:
+            if prediction == target.cpu().detach().numpy() and target.cpu().detach().numpy() >= 34 and target.cpu().detach().numpy() < 37:
                 task4 += 1
-            if prediction == target.cpu().detach().numpy() and target.cpu().detach().numpy() >= 35 and target.cpu().detach().numpy() < 40:
-                task5 += 1
             # tasks total number samples
-            if target.cpu().detach().numpy() < 20:
+            if target.cpu().detach().numpy() < 26:
                 task1_total += 1
-            if target.cpu().detach().numpy() >= 20 and target.cpu().detach().numpy() < 25:
+            if target.cpu().detach().numpy() >= 26 and target.cpu().detach().numpy() < 30:
                 task2_total += 1
-            if target.cpu().detach().numpy() >= 25 and target.cpu().detach().numpy() < 30:
+            if target.cpu().detach().numpy() >= 30 and target.cpu().detach().numpy() < 34:
                 task3_total += 1
-            if target.cpu().detach().numpy() >= 30 and target.cpu().detach().numpy() < 35:
+            if target.cpu().detach().numpy() >= 34 and target.cpu().detach().numpy() < 37:
                 task4_total += 1
-            if target.cpu().detach().numpy() >= 35 and target.cpu().detach().numpy() < 40:
-                task5_total += 1
 
         acc = (base_class_correct / testDataLoader.__len__()) * 100
         
@@ -367,8 +370,6 @@ def main(opt):
            print('task3:', task3/task3_total)
         if task4_total > 0:
            print('task4:', task4/task4_total)
-        if task5_total > 0:
-           print('task5:', task5/task5_total)
         print(f"=> total accuracy: {acc:.2f}")
         print('-------------------------------------------------------------------------')
         # put the models in the training mode
@@ -400,7 +401,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_point', type=int, default=2048, help='Point Number')
     parser.add_argument('--use_uniform_sample', action='store_true', default=False, help='use uniform sampiling')
     parser.add_argument('--use_normals', action='store_true', default=False, help='use normals')
-    parser.add_argument('--num_category', default=20, type=int, choices=[20, 40],  help='training on ModelNet10/40')
+    parser.add_argument('--num_category', default=26, type=int, choices=[20, 40],  help='training on ModelNet10/40')
     parser.add_argument('--sem_file', default=None,  help='training on ModelNet10/40')
     parser.add_argument('--use_memory', default=False, help='use_memory')
     parser.add_argument('--herding', default=True, help='herding')
