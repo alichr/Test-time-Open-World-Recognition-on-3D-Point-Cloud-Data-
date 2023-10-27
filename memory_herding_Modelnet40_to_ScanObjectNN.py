@@ -90,9 +90,8 @@ def main(opt):
 
     
     #load the text features
-    class_name = read_txt_file_class_name("class_name.txt")
-    class_name_prompt = read_txt_file("class_name_modelnet40.txt")
-    prompts = read_json_file("modelnet40_1000.json")
+    class_name = read_txt_file_class_name("class_name_Modelnet40_to_ScanObjectNN.txt")
+
     
     optimizer = optim.Adam(pointnet.parameters(), lr=0.001, betas=(0.9, 0.999))
 

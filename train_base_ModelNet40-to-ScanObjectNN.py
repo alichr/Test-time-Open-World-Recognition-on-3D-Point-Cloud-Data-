@@ -96,8 +96,7 @@ def main(opt):
     relation = relation.to(device)
     
     #load the text features
-    class_name = read_txt_file_class_name("class_name.txt")
-    class_name_prompt = read_txt_file("class_name_modelnet40.txt")
+    class_name = read_txt_file_class_name("class_name_Modelnet40_to_ScanObjectNN.txt")
     prompts = read_json_file("modelnet40_1000.json")
     
     # define the optimizer with all models
@@ -177,10 +176,11 @@ def main(opt):
             prompts_batch = []
             for j in range(opt.num_category):
                 tmp_1 = (class_name[tid[t][j]])
-                tmp_2 = prompts[tmp_1]
+                tmp_1 = tmp_1.split(' ')
+                tmp_2 = prompts[tmp_1[1]]
                 random_idx = random.randint(0, len(tmp_2)-1)
                 prompts_batch.append(tmp_2[random_idx])
-         
+    
             # Forward samples to the text CLIP model
             text = open_clip.tokenize(prompts_batch)
             text_embedding = clip_model.encode_text(text.to(device))
@@ -231,7 +231,7 @@ def main(opt):
         clip_model.eval()
         pointnet.eval()
         #load the text features
-        prompts_test = read_txt_file("class_name_modelnet40.txt")
+        prompts_test = read_txt_file("class_name_Modelnet40_to_ScanObjectNN.txt")
         text = open_clip.tokenize(prompts_test)
         text_embedding_all_classes = clip_model.encode_text(text.to(device))
 
@@ -302,9 +302,8 @@ def main(opt):
         # save the results on a txt file on a new folder for every time the code is run! The folder has the name of the date and time
         if not os.path.exists('results'):
             os.makedirs('results')
-        if not os.path.exists('results/' + str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))):
-            os.makedirs('results/' + str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-        f = open('results/' + str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + '/results.txt', 'a')
+       
+        f = open('results/results.txt', 'a')
         f.write('-------------------------------------------------------------------------\n')
         f.write('Relation Module, Point embedding + img _embedding: ' + str(loss_orthogonal_weight) + ' number of view: ' + str(num_rotations) + '\n')
         f.write('=> Epoch ' + str(epoch) + ' loss: ' + str(train_loss) + ' accuracy: ' + str(100 * train_correct / train_total) + '\n')

@@ -17,7 +17,7 @@ from torch import nn
 from utils.Loss import CombinedConstraintLoss
 from model.Unet import UNetPlusPlus
 from torchmetrics.functional.image import image_gradients
-from configs.modelnet_info import task_ids_total as tid
+from configs.modelnet_scanobjectNN_info import task_ids_total as tid
 import json
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -63,7 +63,7 @@ def main(opt):
     # import pointnet model
     pointnet = PointNetfeat(global_feat=True, feature_transform=opt.feature_transform)
     pointnet = pointnet.to(device)
-    pointnet.load_state_dict(torch.load('cls/pointnet_220.pth', map_location=device))
+   # pointnet.load_state_dict(torch.load('cls/pointnet_5.pth', map_location=device))
 
     # Step 1: Load CLIP model
     clip_model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-16', pretrained='laion2b_s34b_b88k')
@@ -77,23 +77,23 @@ def main(opt):
     transform = {str(i): STN3d() for i in range(num_rotations)}
     for i in range(num_rotations):
         transform[str(i)].to(device)
-        transform[str(i)].load_state_dict(torch.load('cls/transform_220_%d.pth' % i, map_location=device))
+       # transform[str(i)].load_state_dict(torch.load('cls/transform_5_%d.pth' % i, map_location=device))
 
     # load the Unet model
     unet = UNetPlusPlus().to(device)
-    unet.load_state_dict(torch.load('cls/unet_220.pth', map_location=device))
+    #unet.load_state_dict(torch.load('cls/unet_5.pth', map_location=device))
    
     # Step 4: Load the Relation Network
     relation = RelationNetwork(1536, 2048, 1024)
     relation = relation.to(device)
-    relation.load_state_dict(torch.load('cls/relation_220.pth', map_location=device))
+   # relation.load_state_dict(torch.load('cls/relation_5.pth', map_location=device))
 
     
     #load the text features
-    class_name = read_txt_file_class_name("class_name.txt")
+    class_name = read_txt_file_class_name("class_name_Modelnet40_to_ScanObjectNN.txt")
     class_name_prompt = read_txt_file("class_name_modelnet40.txt")
-    prompts = read_json_file("modelnet40_1000.json")
-    
+    prompts_modelnet = read_json_file("modelnet40_1000.json")
+    prompts_scanobjectnn = read_json_file("scanobjectnn_1000.json")
 
     # define the optimizer
     Parameters = [p for model in transform.values() for p in model.parameters()]
@@ -142,10 +142,17 @@ def main(opt):
         print("=> Start training the model")
         # construct the memory bank
         if t == 1:
+              memory_bank_task = memory_bank[0:(num_category-4),:,:]
+              memory_bank_label_task = memory_bank_label[0:(num_category-4),:]
+        elif t == 2:
+                memory_bank_task = memory_bank[0:(num_category-4),:,:]
+                memory_bank_label_task = memory_bank_label[0:(num_category-4),:]
+        elif t == 3:
+                memory_bank_task = memory_bank[0:(num_category-3),:,:]
+                memory_bank_label_task = memory_bank_label[0:(num_category-3),:]    
+        else:
+            continue
 
-        memory_bank_task = memory_bank[0:(num_category-5),:,:]
-        memory_bank_label_task = memory_bank_label[0:(num_category-5),:]
-        mm = 0
         if t == 0:
            nepoch = 0
         else: 
@@ -221,9 +228,14 @@ def main(opt):
                 prompts_batch = []
                 for j in range(num_category):
                     tmp_1 = (class_name[tid_all[j]])
-                    tmp_2 = prompts[tmp_1]
+                    tmp_1 = tmp_1.split(' ')
+                    if j < 26:
+                        tmp_2 = prompts_modelnet[tmp_1[1]]
+                    else:
+                        tmp_2 = prompts_scanobjectnn[tmp_1[1]]              
                     random_idx = random.randint(0, len(tmp_2)-1)
                     prompts_batch.append(tmp_2[random_idx])
+ 
                 # Forward samples to the text CLIP model
                 text = open_clip.tokenize(prompts_batch)
                 text_embedding = clip_model.encode_text(text.to(device))
@@ -244,8 +256,6 @@ def main(opt):
                 loss = loss_t + loss_orthogonal * loss_orthogonal_weight + loss_gradient
                 loss.backward(retain_graph=True)
                 optimizer.step()
-
-                   
 
                 # Calculating the accuracy
                 train_loss += loss.clone().detach().item()
@@ -273,7 +283,7 @@ def main(opt):
         clip_model.eval()
         pointnet.eval()
         #load the text features
-        prompts_test = read_txt_file("class_name_modelnet40.txt")
+        prompts_test = read_txt_file("class_name_Modelnet40_to_ScanObjectNN.txt")
         text = open_clip.tokenize(prompts_test)
         text_embedding_all_classes = clip_model.encode_text(text.to(device))
         task1, task2, task3, task4, task1_total, task2_total, task3_total, task4_total = [0] * 8
@@ -392,7 +402,7 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str, default='cls/3D_model_249.pth', help='path to load a pre-trained model')
     parser.add_argument('--feature_transform', action='store_true', help='use feature transform')
     parser.add_argument('--manualSeed', type=int, default = 42, help='random seed')
-    parser.add_argument('--dataset_path', type=str, default= 'dataset/FSCIL/modelnet/', help="dataset path")
+    parser.add_argument('--dataset_path', type=str, default= 'dataset/FSCIL/modelnet_scanobjectnn/', help="dataset path")
     parser.add_argument('--ntasks', type=str, default= '5', help="number of tasks")
     parser.add_argument('--nclasses', type=str, default= '26', help="number of classes")
     parser.add_argument('--task', type=str, default= '0', help="task number")
