@@ -1,0 +1,13 @@
+a backpack
+a handbag
+a carrot
+a teddybear
+a bowl
+a chair
+a vase
+a book
+a keyboard
+a plant
+a ball
+a hairdryer
+an umbrella
