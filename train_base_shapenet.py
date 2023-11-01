@@ -7,17 +7,18 @@ from tqdm import tqdm
 import open_clip
 from utils.mv_utils_zs_ver_2 import Realistic_Projection_Learnable_new as Realistic_Projection 
 from model.PointNet import PointNetfeat, feature_transform_regularizer, STN3d
+from model.curvenet import *
 from model.Transformation import Transformation
-from utils.datautil_3D_memory_incremental_co3d import *
+from utils.datautil_3D_memory_incremental_shapenet import *
 from model.Relation import RelationNetwork
 import os
 import numpy as np
 from matplotlib import pyplot as plt
 from torch import nn
 from utils.Loss import CombinedConstraintLoss
-from model.Unet import UNetPlusPlus
+from model.Unet_dropout import UNetPlusPlus
 from torchmetrics.functional.image import image_gradients
-from configs.co3d_info import task_ids_total as tid
+from configs.shapenet_info import task_ids_total as tid
 import json
 import datetime
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -71,8 +72,9 @@ def main(opt):
     testDataLoader = dataset[t]['test'] 
 
     # import pointnet model
-    pointnet = PointNetfeat(global_feat=True, feature_transform=opt.feature_transform)
-    pointnet = pointnet.to(device)
+    curvenet = CurveNet()
+    curvenet = curvenet.to(device)
+    
     
     # Step 1: Load CLIP model
     clip_model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-16', pretrained='laion2b_s34b_b88k')
@@ -95,11 +97,12 @@ def main(opt):
     relation = relation.to(device)
     
     #load the text features
-    class_name = read_txt_file_class_name("class_name_co3d.txt")
-    prompts = read_json_file("CO3D.json")
+    class_name = read_txt_file_class_name("class_name_shapenet.txt")
+    prompts = read_json_file("shapenet.json")
+
 
     # define the optimizer with all models
-    optimizer = optim.Adam(list(pointnet.parameters()) + list(relation.parameters()) + list(unet.parameters()) + list(transform[str(0)].parameters()), lr=0.001, betas=(0.9, 0.999))
+    optimizer = optim.Adam(list(curvenet.parameters()) + list(relation.parameters()) + list(unet.parameters()) + list(transform[str(0)].parameters()), lr=0.001, betas=(0.9, 0.999))
    
     # load loss function
     cross_entrpy = nn.BCELoss()
@@ -113,7 +116,7 @@ def main(opt):
         transform[format(i)].train()
     unet.train()
     relation.train()
-    pointnet.train()
+    curvenet.train()
     print("=> Start training the model")
     for epoch in range(opt.nepoch):
         # define the loss
@@ -131,7 +134,7 @@ def main(opt):
             points = points.transpose(2, 1)
 
             # Forward samples to the PointNet model
-            points_embedding,_,_ = pointnet(points)
+            points_embedding = curvenet(points)
 
             # transformation module
             trans = torch.zeros((points.shape[0], num_rotations, 3, 3), device=device)
@@ -181,6 +184,7 @@ def main(opt):
                 prompts_batch.append(tmp_2[random_idx])
 
             # Forward samples to the text CLIP model
+
             text = open_clip.tokenize(prompts_batch)
             text_embedding = clip_model.encode_text(text.to(device))
             text_embedding = text_embedding / torch.norm(text_embedding, dim=1).view(-1, 1)
@@ -198,6 +202,7 @@ def main(opt):
             loss = loss_t + loss_orthogonal * loss_orthogonal_weight + loss_gradient
             loss.backward(retain_graph=True)
             optimizer.step()
+            print(loss)
 
             # Calculating the accuracy
             train_loss += loss.clone().detach().item()
@@ -214,7 +219,7 @@ def main(opt):
         print(f"=> Epoch {epoch} loss: {train_loss:.2f} accuracy: {100 * train_correct / train_total:.2f}")
         torch.save(relation.state_dict(), '%s/relation_%d.pth' % (opt.outf, epoch))
         torch.save(unet.state_dict(), '%s/unet_%d.pth' % (opt.outf, epoch))
-        torch.save(pointnet.state_dict(), '%s/pointnet_%d.pth' % (opt.outf, epoch))
+        torch.save(curvenet.state_dict(), '%s/curvenet_%d.pth' % (opt.outf, epoch))
         # save multiple transformations
         for i in range(num_rotations):
             torch.save(transform[format(i)].state_dict(), '%s/transform_%d_%d.pth' % (opt.outf, epoch, i))
@@ -228,9 +233,9 @@ def main(opt):
         relation.eval() 
         unet.eval()
         clip_model.eval()
-        pointnet.eval()
+        curvenet.eval()
         #load the text features
-        prompts_test = read_txt_file("class_name_co3d.txt")
+        prompts_test = read_txt_file("class_name_shapenet.txt")
         text = open_clip.tokenize(prompts_test)
         text_embedding_all_classes = clip_model.encode_text(text.to(device))
 
@@ -244,7 +249,7 @@ def main(opt):
                     # Forward samples to the PointNet model
                     points = points.transpose(2, 1)
                     points = points.repeat(2, 1, 1)   
-                    points_embedding,_,_ = pointnet(points)
+                    points_embedding = curvenet(points)
 
                     # transformation module
                     trans = torch.zeros((points.shape[0], num_rotations, 3, 3), device=device)
@@ -296,7 +301,7 @@ def main(opt):
             if prediction == target.cpu().detach().numpy():
                base_class_correct += 1
             
-        acc = (base_class_correct / 1325) * 100
+        acc = (base_class_correct / 9356) * 100
         print(f"=> zero-shot accuracy: {acc:.2f}")
         # save the results on a txt file on a new folder for every time the code is run! The folder has the name of the date and time
         if not os.path.exists('results'):
@@ -317,7 +322,7 @@ def main(opt):
         relation.train()
         unet.train()
         clip_model.train()
-        pointnet.train()
+        curvenet.train()
         
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -325,11 +330,11 @@ if __name__ == "__main__":
     parser.add_argument('--num_points', type=int, default=2048, help='number of points in each input point cloud')
     parser.add_argument('--workers', type=int, help='number of data loading workers', default=4)
     parser.add_argument('--nepoch', type=int, default=1, help='number of epochs to train for')
-    parser.add_argument('--outf', type=str, default='cls/co3d', help='output folder to save results')
+    parser.add_argument('--outf', type=str, default='cls/shapenet', help='output folder to save results')
     parser.add_argument('--model', type=str, default='cls/3D_model_249.pth', help='path to load a pre-trained model')
     parser.add_argument('--feature_transform', action='store_true', help='use feature transform')
     parser.add_argument('--manualSeed', type=int, default = 42, help='random seed')
-    parser.add_argument('--dataset_path', type=str, default= 'dataset/FSCIL/co3d/', help="dataset path")
+    parser.add_argument('--dataset_path', type=str, default= 'dataset/FSCIL/shapenet/', help="dataset path")
     parser.add_argument('--ntasks', type=str, default= '5', help="number of tasks")
     parser.add_argument('--nclasses', type=str, default= '25', help="number of classes")
     parser.add_argument('--task', type=str, default= '0', help="task number")

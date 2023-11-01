@@ -6,7 +6,7 @@ from path import Path
 import torch
 import torchvision.transforms as Tr
 import pandas as pd
-from configs.shrec16_info import task_ids_total as tid
+from configs.shapenet_info import task_ids_total as tid
 
 """#Preprocess"""
 class Normalize(object):
@@ -185,11 +185,11 @@ class iPointCloudData(PointCloudData):
         if i not in sem_classes:
           sem_classes.append(i)
 
-      sem_classes = [int(c) for c in sem_classes]
-      wordvector = sio.loadmat(os.path.join(root, sem_file))
-      w2v = wordvector['word']
-      self.sem = w2v[sem_classes,:]
-      print('(',self.folder,') sem shape:', self.sem.shape, sem_classes, len(np.unique(labels)))
+      # sem_classes = [int(c) for c in sem_classes]
+      # wordvector = sio.loadmat(os.path.join(root, sem_file))
+      # w2v = wordvector['word']
+      # self.sem = w2v[sem_classes,:]
+      # print('(',self.folder,') sem shape:', self.sem.shape, sem_classes, len(np.unique(labels)))
 
     def __len__(self):
         return len(self.pointcloud)
@@ -244,20 +244,20 @@ class DatasetGen(object):
                                 ToTensor()
                               ])  
       
-        self.task_memory={} 
-        self.counter={}
-        ###########   ADD MEMORY
-        for i in range(self.num_tasks):
-            self.task_memory[i] = {}
-            self.counter[i]={}
-            self.task_memory[i]['name'] = []
-            self.task_memory[i]['pcdpath'] = []
-            self.task_memory[i]['label'] = []
-            self.task_memory[i]['class_label'] = []
-            self.counter[i]['label']=[]
-            self.counter[i]['name'] = []
-            self.counter[i]['pcdpath'] = []
-            self.counter[i]['class_label'] = []
+        # self.task_memory={} 
+        # self.counter={}
+        # ###########   ADD MEMORY
+        # for i in range(self.num_tasks):
+        #     self.task_memory[i] = {}
+        #     self.counter[i]={}
+        #     self.task_memory[i]['name'] = []
+        #     self.task_memory[i]['pcdpath'] = []
+        #     self.task_memory[i]['label'] = []
+        #     self.task_memory[i]['class_label'] = []
+        #     self.counter[i]['label']=[]
+        #     self.counter[i]['name'] = []
+        #     self.counter[i]['pcdpath'] = []
+        #     self.counter[i]['class_label'] = []
 
         # task ids
         self.task_ids_total=tid #[[i for i in range(0,26)],[i for i in range(26,30)],[i for i in range(30,34)],[i for i in range(34,37)]]
@@ -301,8 +301,8 @@ class DatasetGen(object):
         self.dataloaders[task_id]['train'] = train_loader  
         self.dataloaders[task_id]['test'] = test_loader 
         
-        self.dataloaders[task_id]['sem_train'] = torch.from_numpy(self.train_set[task_id].sem).float()
-        self.dataloaders[task_id]['sem_test'] = torch.from_numpy(self.test_set[task_id].sem).float()
+      #  self.dataloaders[task_id]['sem_train'] = torch.from_numpy(self.train_set[task_id].sem).float()
+       # self.dataloaders[task_id]['sem_test'] = torch.from_numpy(self.test_set[task_id].sem).float()
         
         if phase=='training':     
             print ('Task ID: {} -> {}'.format(task_id,task_ids[task_id]))
