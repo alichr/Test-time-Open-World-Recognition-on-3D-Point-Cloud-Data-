@@ -9,7 +9,7 @@ from utils.mv_utils_zs_ver_2 import Realistic_Projection_Learnable_new as Realis
 from model.PointNet import PointNetfeat, feature_transform_regularizer, STN3d
 from model.curvenet import *
 from model.Transformation import Transformation
-from utils.datautil_3D_memory_incremental_shapenet import *
+from utils.datautil_3D_memory_incremental_shapenet_to_scanobjectnn import *
 from model.Relation import RelationNetwork
 import os
 import numpy as np
@@ -18,7 +18,7 @@ from torch import nn
 from utils.Loss import CombinedConstraintLoss
 from model.Unet_dropout import UNetPlusPlus
 from torchmetrics.functional.image import image_gradients
-from configs.shapenet_info import task_ids_total as tid
+from configs.shapenet_scanobjectnn_info import task_ids_total as tid
 import json
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -64,7 +64,7 @@ def main(opt):
     # import pointnet model
     curvenet = CurveNet()
     curvenet = curvenet.to(device)
-    curvenet.load_state_dict(torch.load('cls/shapenet/curvenet_40.pth', map_location=device))
+    curvenet.load_state_dict(torch.load('cls/shapenet_scanobjectnn/curvenet_40.pth', map_location=device))
 
     # Step 1: Load CLIP model
     clip_model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-16', pretrained='laion2b_s34b_b88k')
@@ -78,20 +78,20 @@ def main(opt):
     transform = {str(i): STN3d() for i in range(num_rotations)}
     for i in range(num_rotations):
         transform[str(i)].to(device)
-        transform[str(i)].load_state_dict(torch.load('cls/shapenet/transform_40_%d.pth' % i, map_location=device))
+        transform[str(i)].load_state_dict(torch.load('cls/shapenet_scanobjectnn/transform_40_%d.pth' % i, map_location=device))
 
     # load the Unet model
     unet = UNetPlusPlus().to(device)
-    unet.load_state_dict(torch.load('cls/shapenet/unet_40.pth', map_location=device))
+    unet.load_state_dict(torch.load('cls/shapenet_scanobjectnn/unet_40.pth', map_location=device))
    
     # Step 4: Load the Relation Network
     relation = RelationNetwork(1536, 2048, 1024)
     relation = relation.to(device)
-    relation.load_state_dict(torch.load('cls/shapenet/relation_40.pth', map_location=device))
+    relation.load_state_dict(torch.load('cls/shapenet_scanobjectnn/relation_40.pth', map_location=device))
 
     
     #load the text features
-    class_name = read_txt_file_class_name("class_name_shapenet.txt")
+    class_name = read_txt_file_class_name("class_name_shapenet_scanobjectnn.txt")
 
     
     optimizer = optim.Adam(curvenet.parameters(), lr=0.001, betas=(0.9, 0.999))
@@ -103,13 +103,13 @@ def main(opt):
     mse_loss = nn.MSELoss()
 
     # constract a memory bank of inpt data consisting of 1 samples per calss
-    memory_bank = torch.zeros((55, 1024,3)).to(device)
-    memory_bank_label = torch.zeros((55, 1)).to(device)
+    memory_bank = torch.zeros((59, 1024,3)).to(device)
+    memory_bank_label = torch.zeros((59, 1)).to(device)
    
     # load the data
-    prototype = np.zeros((55, 512))
-    sample_num = np.zeros((55))
-    for t in range(0,6):
+    prototype = np.zeros((59, 512))
+    sample_num = np.zeros((59))
+    for t in range(0,4):
         path=Path(opt.dataset_path)
         print(path)
         dataloader = DatasetGen(opt, root=path, fewshot=5)
@@ -117,19 +117,13 @@ def main(opt):
         trainDataLoader = dataset[t]['train']
         testDataLoader = dataset[t]['test'] 
         if t == 0:
-            num_category = 25
+            num_category = 44
         elif t == 1:
-            num_category = 30
+            num_category = 49
         elif t == 2:
-            num_category = 35
+            num_category = 54
         elif t == 3:
-            num_category = 40 
-        elif t == 4:
-            num_category = 45
-        elif t == 5:
-            num_category = 50
-        else:
-            num_category = 55    
+            num_category = 59    
         print('task:', t)
         # train the model
         clip_model.eval()
@@ -197,9 +191,9 @@ def main(opt):
         prototype[k, :] = prototype[k, :] / sample_num[k]
             
 
-    Distance = np.zeros((55))
+    Distance = np.zeros((59))
     print('----------------------------------------------------------')
-    for t in range(0,6):
+    for t in range(0,4):
         path=Path(opt.dataset_path)
         print(path)
         dataloader = DatasetGen(opt, root=path, fewshot=5)
@@ -207,19 +201,13 @@ def main(opt):
         trainDataLoader = dataset[t]['train']
         testDataLoader = dataset[t]['test'] 
         if t == 0:
-            num_category = 25
+            num_category = 44
         elif t == 1:
-            num_category = 30
+            num_category = 49
         elif t == 2:
-            num_category = 35
+            num_category = 54
         elif t == 3:
-            num_category = 40
-        elif t == 4:
-            num_category = 45
-        elif t == 5:
-            num_category = 50
-        else:
-            num_category = 55     
+            num_category = 59 
         print('task:', t)
         # train the model
         clip_model.eval()
@@ -301,16 +289,16 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str, default='cls/3D_model_249.pth', help='path to load a pre-trained model')
     parser.add_argument('--feature_transform', action='store_true', help='use feature transform')
     parser.add_argument('--manualSeed', type=int, default = 42, help='random seed')
-    parser.add_argument('--dataset_path', type=str, default= 'dataset/FSCIL/shapenet/', help="dataset path")
+    parser.add_argument('--dataset_path', type=str, default= 'dataset/FSCIL/shapenet_scanobjectnn/', help="dataset path")
     parser.add_argument('--ntasks', type=str, default= '5', help="number of tasks")
-    parser.add_argument('--nclasses', type=str, default= '25', help="number of classes")
+    parser.add_argument('--nclasses', type=str, default= '44', help="number of classes")
     parser.add_argument('--task', type=str, default= '0', help="task number")
     parser.add_argument('--num_samples', type=str, default= '0', help="number of samples per class")
     parser.add_argument('--process_data', action='store_true', default=False, help='save data offline')
     parser.add_argument('--num_point', type=int, default=2048, help='Point Number')
     parser.add_argument('--use_uniform_sample', action='store_true', default=False, help='use uniform sampiling')
     parser.add_argument('--use_normals', action='store_true', default=False, help='use normals')
-    parser.add_argument('--num_category', default=25, type=int, choices=[20, 40],  help='training on ModelNet10/40')
+    parser.add_argument('--num_category', default=44, type=int, choices=[20, 40],  help='training on ModelNet10/40')
     parser.add_argument('--sem_file', default=None,  help='training on ModelNet10/40')
     parser.add_argument('--use_memory', default=False, help='use_memory')
     parser.add_argument('--herding', default=True, help='herding')
