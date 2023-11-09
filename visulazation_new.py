@@ -5,7 +5,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from tqdm import tqdm
 import open_clip
-from utils.mv_utils_zs_ver_2 import Realistic_Projection_Learnable_new as Realistic_Projection 
+from utils.mv_utils_zs_ver_2 import Realistic_Projection
 from model.PointNet import PointNetfeat, feature_transform_regularizer, STN3d
 from model.Transformation import Transformation
 #from utils.dataloader_ModelNet40 import *
@@ -66,7 +66,7 @@ def main(opt):
     # import pointnet model
     pointnet = PointNetfeat(global_feat=True, feature_transform=opt.feature_transform)
     pointnet = pointnet.to(device)
-    #pointnet.load_state_dict(torch.load('cls/pointnet_220.pth', map_location=device))
+    pointnet.load_state_dict(torch.load('cls/pointnet_220.pth', map_location=device))
 
     # Step 1: Load CLIP model
     clip_model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-16', pretrained='laion2b_s34b_b88k')
@@ -75,21 +75,21 @@ def main(opt):
         param.requires_grad = False
 
     # Step 2: Load Realistic Projection object
-    proj = Realistic_Projection().to(device)
+    proj = Realistic_Projection()
     # Step 3: Load the Transformation model
     transform = {str(i): STN3d() for i in range(num_rotations)}
     for i in range(num_rotations):
         transform[str(i)].to(device)
-       # transform[str(i)].load_state_dict(torch.load('cls/transform_220_%d.pth' % i, map_location=device))
+        transform[str(i)].load_state_dict(torch.load('cls/transform_220_%d.pth' % i, map_location=device))
 
     # load the Unet model
     unet = UNetPlusPlus().to(device)
-   # unet.load_state_dict(torch.load('cls/unet_220.pth', map_location=device))
+    unet.load_state_dict(torch.load('cls/unet_220.pth', map_location=device))
    
     # Step 4: Load the Relation Network
     relation = RelationNetwork(1536, 2048, 1024)
     relation = relation.to(device)
-   # relation.load_state_dict(torch.load('cls/relation_220.pth', map_location=device))
+    relation.load_state_dict(torch.load('cls/relation_220.pth', map_location=device))
 
     
     #load the text features
@@ -144,37 +144,24 @@ def main(opt):
                     continue
 
                 #visulize one of the 3d point cloud using open3d
-                # import open3d as o3d
-                # pcd = o3d.geometry.PointCloud()
-                # pcd.points = o3d.utility.Vector3dVector(points[21].cpu().numpy())
-                # o3d.visualization.draw_geometries([pcd])
-                # stop
-                
+            
                 
 
-                optimizer.zero_grad()
-                points = points.transpose(2, 1)
-
-                # Forward samples to the PointNet model
-                points_embedding,_,_ = pointnet(points)
-
-                # transformation module
-                trans = torch.zeros((points.shape[0], num_rotations, 3, 3), device=device)
-                for jj in range(num_rotations):
-                    trans[:, jj, :, :] = transform[format(jj)](points)
-                loss_orthogonal = constraint_loss(trans).mean()
+           
                             
                 # depth map generation
-                points = points.transpose(2, 1)   
-                depth_map = torch.zeros((points.shape[0] * num_rotations, 3, 224, 224)).to(device)  
-                for jj in range(num_rotations):
-                    depth_map_tmp = proj.get_img(points, trans[:,jj,:,:].view(-1, 9))    
-                    depth_map_tmp = torch.nn.functional.interpolate(depth_map_tmp, size=(224, 224), mode='bilinear', align_corners=True)
-                    depth_map[jj * points.shape[0]:(jj + 1) * points.shape[0], :, :, :] = depth_map_tmp
+              #  points = points.transpose(2, 1)  
+
+                depth_map_tmp = proj.get_img(points)
+                depth_map = torch.nn.functional.interpolate(depth_map_tmp, size=(224, 224), mode='bilinear', align_corners=True)
+
                 
                 # save the depth map as image png
                 import torchvision
                # torchvision.utils.save_image(depth_map[21], 'depth_map.png')
+                for jj in range(10):
+                    torchvision.utils.save_image(depth_map[210+jj], 'depth_map_%d.png' % jj)
+                stop
                 
                 
 
@@ -186,7 +173,7 @@ def main(opt):
                     depth_map_reverse = 1 - depth_map[jj * points.shape[0]:(jj + 1) * points.shape[0]]
                     mask = (depth_map_reverse != 0).float()
       
-                    torchvision.utils.save_image(mask[5], 'mask_map_1.png')
+                    torchvision.utils.save_image(mask[21], 'mask_map.png')
                     
                     texture_map = unet(mask)
                     # loss for gradient
@@ -195,8 +182,8 @@ def main(opt):
                     loss_gradient += mse_loss(dy, dy_init) + mse_loss(dx, dx_init)
                     RGB_map[jj * points.shape[0]:(jj + 1) * points.shape[0], :, :, :] = depth_map[jj * points.shape[0]:(jj + 1) * points.shape[0]] * texture_map
 
-                torchvision.utils.save_image(RGB_map[5], 'RGB_map_1.png')
-                stop
+                #torchvision.utils.save_image(RGB_map[21], 'RGB_map.png')
+                #stop
        
     
 

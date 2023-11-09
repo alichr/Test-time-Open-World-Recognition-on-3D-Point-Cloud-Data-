@@ -9,7 +9,7 @@ from utils.mv_utils_zs_ver_2 import Realistic_Projection_Learnable_new as Realis
 from model.PointNet import PointNetfeat, feature_transform_regularizer, STN3d
 from model.curvenet import *
 from model.Transformation import Transformation
-from utils.datautil_3D_memory_incremental_shapenet_to_scanobjectnn import *
+from utils.datautil_3D_memory_incremental_shapenet_to_co3d import *
 from model.Relation import RelationNetwork
 import os
 import numpy as np
@@ -18,7 +18,7 @@ from torch import nn
 from utils.Loss import CombinedConstraintLoss
 from model.Unet_dropout import UNetPlusPlus
 from torchmetrics.functional.image import image_gradients
-from configs.shapenet_scanobjectnn_info import task_ids_total as tid
+from configs.shapenet_co3d_info import task_ids_total as tid
 import json
 import datetime
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -97,7 +97,7 @@ def main(opt):
     relation = relation.to(device)
     
     #load the text features
-    class_name = read_txt_file_class_name("class_name_shapenet_scanobjectnn.txt")
+    class_name = read_txt_file_class_name("class_name_shapenet_co3d.txt")
     prompts = read_json_file("shapenet.json")
 
 
@@ -235,7 +235,7 @@ def main(opt):
         clip_model.eval()
         curvenet.eval()
         #load the text features
-        prompts_test = read_txt_file("class_name_shapenet_scanobjectnn.txt")
+        prompts_test = read_txt_file("class_name_shapenet_co3d.txt")
         text = open_clip.tokenize(prompts_test)
         text_embedding_all_classes = clip_model.encode_text(text.to(device))
 
@@ -301,7 +301,7 @@ def main(opt):
             if prediction == target.cpu().detach().numpy():
                base_class_correct += 1
             
-        acc = (base_class_correct / 5845) * 100
+        acc = (base_class_correct / 6604) * 100
         print(f"=> zero-shot accuracy: {acc:.2f}")
         # save the results on a txt file on a new folder for every time the code is run! The folder has the name of the date and time
         if not os.path.exists('results'):
@@ -329,21 +329,21 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default= 32, help='input batch size')
     parser.add_argument('--num_points', type=int, default=2048, help='number of points in each input point cloud')
     parser.add_argument('--workers', type=int, help='number of data loading workers', default=4)
-    parser.add_argument('--nepoch', type=int, default=1, help='number of epochs to train for')
-    parser.add_argument('--outf', type=str, default='cls/shapenet_scanobjectnn', help='output folder to save results')
+    parser.add_argument('--nepoch', type=int, default=250, help='number of epochs to train for')
+    parser.add_argument('--outf', type=str, default='cls/shapenet_co3d', help='output folder to save results')
     parser.add_argument('--model', type=str, default='cls/3D_model_249.pth', help='path to load a pre-trained model')
     parser.add_argument('--feature_transform', action='store_true', help='use feature transform')
     parser.add_argument('--manualSeed', type=int, default = 42, help='random seed')
-    parser.add_argument('--dataset_path', type=str, default= 'dataset/FSCIL/shapenet_scanobjectnn/', help="dataset path")
+    parser.add_argument('--dataset_path', type=str, default= 'dataset/FSCIL/shapenet_co3d/', help="dataset path")
     parser.add_argument('--ntasks', type=str, default= '5', help="number of tasks")
-    parser.add_argument('--nclasses', type=str, default= '44', help="number of classes")
+    parser.add_argument('--nclasses', type=str, default= '39', help="number of classes")
     parser.add_argument('--task', type=str, default= '0', help="task number")
     parser.add_argument('--num_samples', type=str, default= '0', help="number of samples per class")
     parser.add_argument('--process_data', action='store_true', default=False, help='save data offline')
     parser.add_argument('--num_point', type=int, default=2048, help='Point Number')
     parser.add_argument('--use_uniform_sample', action='store_true', default=False, help='use uniform sampiling')
     parser.add_argument('--use_normals', action='store_true', default=False, help='use normals')
-    parser.add_argument('--num_category', default=44, type=int, choices=[20, 40],  help='training on ModelNet10/40')
+    parser.add_argument('--num_category', default=39, type=int, choices=[20, 40],  help='training on ModelNet10/40')
     parser.add_argument('--sem_file', default=None,  help='training on ModelNet10/40')
     parser.add_argument('--use_memory', default=False, help='use_memory')
     parser.add_argument('--herding', default=True, help='herding')
