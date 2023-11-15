@@ -9,7 +9,7 @@ from utils.mv_utils_zs_ver_2 import Realistic_Projection_Learnable_new as Realis
 from model.PointNet import PointNetfeat, feature_transform_regularizer, STN3d
 from model.Transformation import Transformation
 #from utils.dataloader_ModelNet40 import *
-from utils.datautil_3D_memory_incremental_modelnet import *
+from utils.datautil_3D_memory_incremental_modelnet_to_scanobjectnn import *
 from model.Relation import RelationNetwork
 import os
 import numpy as np
@@ -18,7 +18,7 @@ from torch import nn
 from utils.Loss import CombinedConstraintLoss
 from model.Unet import UNetPlusPlus
 from torchmetrics.functional.image import image_gradients
-from configs.modelnet_info import task_ids_total as tid
+from configs.modelnet_scanobjectNN_info import task_ids_total as tid
 import json
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -114,7 +114,7 @@ def main(opt):
 
 
  
-    for t in range(0,5):
+    for t in range(1,5):
         path=Path(opt.dataset_path)
         print(path)
         dataloader = DatasetGen(opt, root=path, fewshot=5)
@@ -122,6 +122,7 @@ def main(opt):
         trainDataLoader = dataset[t]['train']
         testDataLoader = dataset[t]['test'] 
         num_category = 20 + t * 5
+       
         print('task:', t)
         # train the model
         clip_model.eval()
@@ -141,17 +142,16 @@ def main(opt):
             for i, data in tqdm(enumerate(trainDataLoader, 0)):
                 points, target = data['pointclouds'].to(device).float(), data['labels'].to(device)
                 points, target = points.to(device), target.to(device)
-                print(target)
-                
                 if points.shape[0] < opt.batch_size:
                     continue
 
+                print(target)
                 #visulize one of the 3d point cloud using open3d
-                # import open3d as o3d
-                # pcd = o3d.geometry.PointCloud()
-                # pcd.points = o3d.utility.Vector3dVector(points[5].cpu().numpy())
-                # o3d.visualization.draw_geometries([pcd])
-                # stop
+                import open3d as o3d
+                pcd = o3d.geometry.PointCloud()
+                pcd.points = o3d.utility.Vector3dVector(points[16].cpu().numpy())
+                o3d.visualization.draw_geometries([pcd])
+                stop
                 
                 
 
@@ -177,7 +177,8 @@ def main(opt):
                 
                 # save the depth map as image png
                 import torchvision
-                torchvision.utils.save_image(depth_map[4], 'depth_map.png')
+                torchvision.utils.save_image(depth_map[16], 'depth_map.png')
+                stop
                 
                 
 
@@ -189,7 +190,7 @@ def main(opt):
                     depth_map_reverse = 1 - depth_map[jj * points.shape[0]:(jj + 1) * points.shape[0]]
                     mask = (depth_map_reverse != 0).float()
       
-                   # torchvision.utils.save_image(mask[5], 'mask_map_1.png')
+                    torchvision.utils.save_image(mask[5], 'mask_map_1.png')
                     
                     texture_map = unet(mask)
                     # loss for gradient
@@ -198,17 +199,14 @@ def main(opt):
                     loss_gradient += mse_loss(dy, dy_init) + mse_loss(dx, dx_init)
                     RGB_map[jj * points.shape[0]:(jj + 1) * points.shape[0], :, :, :] = depth_map[jj * points.shape[0]:(jj + 1) * points.shape[0]] * texture_map
 
-                torchvision.utils.save_image(RGB_map[4], 'RGB_map.png')
-                # save the RGB map as image png using opencv
-              
-
+                torchvision.utils.save_image(RGB_map[0], 'RGB_map_1.png')
                 stop
        
     
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch_size', type=int, default= 32, help='input batch size')
+    parser.add_argument('--batch_size', type=int, default= 20, help='input batch size')
     parser.add_argument('--num_points', type=int, default=2048, help='number of points in each input point cloud')
     parser.add_argument('--workers', type=int, help='number of data loading workers', default=4)
     parser.add_argument('--nepoch', type=int, default=20, help='number of epochs to train for')
@@ -216,7 +214,7 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str, default='cls/3D_model_249.pth', help='path to load a pre-trained model')
     parser.add_argument('--feature_transform', action='store_true', help='use feature transform')
     parser.add_argument('--manualSeed', type=int, default = 42, help='random seed')
-    parser.add_argument('--dataset_path', type=str, default= 'dataset/FSCIL/modelnet/', help="dataset path")
+    parser.add_argument('--dataset_path', type=str, default= 'dataset/FSCIL/modelnet_scanobjectnn/', help="dataset path")
     parser.add_argument('--ntasks', type=str, default= '5', help="number of tasks")
     parser.add_argument('--nclasses', type=str, default= '26', help="number of classes")
     parser.add_argument('--task', type=str, default= '0', help="task number")
